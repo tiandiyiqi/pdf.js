@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF.JS 查看器集成示例</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .viewer-container {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+        .controls {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 5px;
+        }
+        button {
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h3>PDF.JS 查看器集成示例</h3>
+        <input type="text" id="pdf-url" placeholder="输入PDF文件URL" value="../../web/test.pdf">
+        <button id="load-pdf">加载PDF</button>
+        <p>说明：此示例集成了完整的PDF.JS查看器，包括工具栏、侧边栏等UI组件。</p>
+    </div>
+    
+    <!-- 使用iframe集成完整PDF.JS查看器 -->
+    <iframe id="pdf-viewer" class="viewer-container" src="../../web/viewer.html?file=../../web/test.pdf"></iframe>
+
+    <script>
+        // 获取DOM元素
+        const pdfUrlInput = document.getElementById('pdf-url');
+        const loadPdfBtn = document.getElementById('load-pdf');
+        const pdfViewer = document.getElementById('pdf-viewer');
+
+        // 加载PDF文件的函数
+        function loadPdf() {
+            const pdfUrl = pdfUrlInput.value;
+            if (pdfUrl) {
+                // 使用URL参数传递PDF文件路径
+                // 需要对URL进行编码，特别是包含特殊字符时
+                const encodedPdfUrl = encodeURIComponent(pdfUrl);
+                pdfViewer.src = `../../web/viewer.html?file=${encodedPdfUrl}`;
+            }
+        }
+
+        // 事件监听
+        loadPdfBtn.addEventListener('click', loadPdf);
+
+        // 回车加载
+        pdfUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadPdf();
+            }
+        });
+    </script>
+</body>
+</html>

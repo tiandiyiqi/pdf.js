@@ -2195,6 +2195,33 @@ gulp.task(
         gulp.series("dev-sandbox")
       );
     },
+    function watchCore() {
+      const defines = { ...DEFINES, GENERIC: true, TESTING: true };
+      const devBuildDir = BUILD_DIR + "dev/";
+      
+      // 创建开发构建目录
+      if (!fs.existsSync(devBuildDir)) {
+        fs.mkdirSync(devBuildDir, { recursive: true });
+      }
+      
+      gulp.watch(
+        ["src/**/*.js", "!src/pdf.{sandbox,sandbox.external,scripting}.js", "!src/scripting_api/*.js", "!src/shared/scripting_utils.js"],
+        { ignoreInitial: false },
+        function rebuildCore(done) {
+          console.log();
+          console.log("### Rebuilding core files");
+          
+          return ordered([
+            createMainBundle(defines).pipe(gulp.dest(devBuildDir + "build")),
+            createWorkerBundle(defines).pipe(gulp.dest(devBuildDir + "build")),
+            createWebBundle(defines, {
+              disableVersionInfo: true,
+              defaultPreferencesDir: defines.SKIP_BABEL ? "generic/" : "generic-legacy/",
+            }).pipe(gulp.dest(devBuildDir + "web"))
+          ]);
+        }
+      );
+    },
     async function createServer() {
       console.log();
       console.log("### Starting local server");

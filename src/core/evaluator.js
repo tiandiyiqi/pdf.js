@@ -1079,6 +1079,25 @@ class PartialEvaluator {
     // This array holds the converted/processed state data.
     const gStateObj = [];
     let promise = Promise.resolve();
+    // Track if we found overprint properties
+    let hasOverprint = false;
+    let bmValue = null;
+
+    // First pass: check for overprint properties and save BM value
+    for (const [key, value] of gState) {
+      switch (key) {
+        case "OP":
+        case "op":
+        case "OPM":
+          hasOverprint = true;
+          break;
+        case "BM":
+          bmValue = value;
+          break;
+      }
+    }
+
+    // Second pass: process all properties with correct overprint handling
     for (const [key, value] of gState) {
       switch (key) {
         case "Type":
@@ -1118,7 +1137,12 @@ class PartialEvaluator {
           );
           break;
         case "BM":
-          gStateObj.push([key, normalizeBlendMode(value)]);
+          // If we have overprint, override with darken blend mode
+          if (hasOverprint) {
+            gStateObj.push([key, "darken"]);
+          } else {
+            gStateObj.push([key, normalizeBlendMode(value)]);
+          }
           break;
         case "SMask":
           if (isName(value, "None")) {
@@ -1153,6 +1177,9 @@ class PartialEvaluator {
         case "OP":
         case "op":
         case "OPM":
+          // Do not add overprint properties to the state
+          info("Overprint property detected and removed: " + key);
+          break;
         case "BG":
         case "BG2":
         case "UCR":

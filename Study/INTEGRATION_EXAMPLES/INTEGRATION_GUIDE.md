@@ -1,0 +1,263 @@
+# PDF.JS Web项目集成指南
+
+## 概述
+
+PDF.JS是一个用于在web浏览器中渲染PDF文档的JavaScript库，它由Mozilla开发和维护。本指南将详细介绍如何在web项目中集成和使用PDF.JS，包括两种主要方式：
+
+1. **核心库集成** - 直接使用PDF.JS的核心API，适合需要自定义界面和功能的项目
+2. **完整查看器集成** - 使用预构建的PDF.JS查看器，包含完整的UI组件
+
+## 准备工作
+
+### 1. 编译PDF.JS
+
+在集成PDF.JS之前，需要先编译它。确保你已经：
+
+1. 安装了Node.js（版本 >= 20.16.0）
+2. 克隆或下载了PDF.JS源代码
+3. 在PDF.JS目录中安装了依赖：
+   ```bash
+   npm install
+   ```
+
+编译开发版本：
+```bash
+npx gulp server
+```
+
+编译后的文件将位于 `build/dev/` 目录下：
+- `build/dev/build/pdf.mjs` - 主库文件
+- `build/dev/build/pdf.worker.mjs` - Worker文件
+- `build/dev/web/` - 完整查看器文件
+
+### 2. 文件结构
+
+编译完成后，你将获得以下关键文件：
+
+```
+build/dev/
+├── build/
+│   ├── pdf.mjs          # 主库文件
+│   └── pdf.worker.mjs   # Worker文件
+└── web/
+    ├── viewer.html      # 查看器主页面
+    ├── viewer.js        # 查看器脚本
+    ├── viewer.css       # 查看器样式
+    └── pdfjs.js         # 查看器入口文件
+```
+
+## 方法一：核心库集成
+
+### 1. 引入文件
+
+在HTML文件中，使用ES模块方式引入PDF.JS：
+
+```html
+<script type="module">
+    import { pdfjsLib } from './path/to/pdf.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './path/to/pdf.worker.mjs';
+    
+    // 你的代码
+</script>
+```
+
+### 2. 基本使用示例
+
+```javascript
+// 异步加载PDF文件
+async function loadPdf() {
+    try {
+        // 加载PDF文档
+        const pdfDoc = await pdfjsLib.getDocument('path/to/document.pdf').promise;
+        
+        // 获取总页数
+        console.log('总页数:', pdfDoc.numPages);
+        
+        // 渲染第一页
+        const page = await pdfDoc.getPage(1);
+        
+        // 创建canvas元素
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 设置渲染尺寸
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale: scale });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        // 渲染页面到canvas
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+        await page.render(renderContext).promise;
+        
+        // 将canvas添加到页面
+        document.body.appendChild(canvas);
+        
+    } catch (error) {
+        console.error('加载PDF失败:', error);
+    }
+}
+
+// 调用加载函数
+loadPdf();
+```
+
+### 3. 核心API说明
+
+- **pdfjsLib.getDocument(url)** - 加载PDF文档
+  - 参数: PDF文件的URL或ArrayBuffer
+  - 返回: Promise，解析为PDFDocumentProxy对象
+
+- **PDFDocumentProxy.getPage(pageNum)** - 获取指定页码的页面
+  - 参数: 页码（从1开始）
+  - 返回: Promise，解析为PDFPageProxy对象
+
+- **PDFPageProxy.render(renderContext)** - 渲染页面到canvas
+  - 参数: 渲染上下文对象，包含canvasContext和viewport
+  - 返回: Promise，解析为渲染结果
+
+## 方法二：完整查看器集成
+
+### 1. iframe集成（最简单的方式）
+
+```html
+<iframe
+    src="/path/to/viewer.html?file=/path/to/document.pdf"
+    width="100%"
+    height="100vh"
+    frameborder="0"
+></iframe>
+```
+
+### 2. 直接集成到页面
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Viewer</title>
+    
+    <!-- 引入PDF.JS查看器样式 -->
+    <link rel="stylesheet" href="/path/to/viewer.css">
+</head>
+<body>
+    <!-- 查看器容器 -->
+    <div id="viewerContainer" class="viewer-container"></div>
+    
+    <!-- 引入PDF.JS查看器脚本 -->
+    <script src="/path/to/pdfjs.js"></script>
+    <script src="/path/to/viewer.js"></script>
+    
+    <script>
+        // 初始化查看器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置PDF文件URL
+            const pdfUrl = '/path/to/document.pdf';
+            
+            // 初始化查看器
+            PDFViewerApplication.open(pdfUrl);
+        });
+    </script>
+</body>
+</html>
+```
+
+### 3. 查看器配置
+
+查看器支持多种配置选项，可以通过URL参数传递：
+
+```html
+<iframe src="viewer.html?file=document.pdf&toolbar=0&sidebar=0"></iframe>
+```
+
+常见配置参数：
+- `file` - PDF文件的URL
+- `toolbar` - 是否显示工具栏（0 = 隐藏，1 = 显示）
+- `sidebar` - 是否显示侧边栏（0 = 隐藏，1 = 显示）
+- `page` - 初始页码
+- `zoom` - 初始缩放级别（例如：100, "page-fit", "page-width"）
+
+## 高级配置
+
+### 1. CORS处理
+
+如果PDF文件来自不同的域，需要确保服务器配置了正确的CORS头：
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, OPTIONS
+Access-Control-Allow-Headers: Range
+Access-Control-Expose-Headers: Accept-Ranges, Content-Encoding, Content-Length, Content-Range
+```
+
+### 2. Worker配置
+
+可以自定义Worker的加载路径：
+
+```javascript
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'path/to/pdf.worker.mjs';
+```
+
+### 3. 字体渲染
+
+如果需要渲染非标准字体，可以配置字体加载路径：
+
+```javascript
+pdfjsLib.GlobalWorkerOptions.fontSrc = 'path/to/fonts/';
+```
+
+## 性能优化
+
+1. **延迟加载** - 只在需要时加载PDF.JS
+2. **按需渲染** - 只渲染当前可见的页面
+3. **使用CDN** - 对于生产环境，考虑使用CDN托管的PDF.JS
+4. **禁用不必要的功能** - 根据需要配置查看器选项
+
+## 浏览器兼容性
+
+PDF.JS支持所有现代浏览器：
+- Chrome 60+
+- Firefox 55+
+- Safari 11+
+- Edge 79+
+
+## 故障排除
+
+### 1. "Failed to fetch" 错误
+
+确保：
+- PDF文件路径正确
+- 服务器配置了正确的CORS头（如果是跨域请求）
+- PDF文件没有损坏
+
+### 2. Worker加载失败
+
+确保：
+- `workerSrc` 路径正确
+- 服务器支持.mjs文件的MIME类型（application/javascript）
+
+### 3. 渲染问题
+
+- 检查浏览器控制台是否有错误信息
+- 确保Canvas元素的尺寸正确设置
+- 尝试调整缩放级别
+
+## 示例项目
+
+查看 `INTEGRATION_EXAMPLES/` 目录下的示例：
+
+1. `core-integration.html` - 核心库集成示例
+2. `viewer-integration.html` - 完整查看器集成示例
+
+## 总结
+
+PDF.JS提供了灵活的方式在web项目中渲染PDF文档。选择哪种集成方式取决于你的需求：
+
+- **核心库集成** - 适合需要高度自定义界面和功能的项目
+- **完整查看器集成** - 适合快速集成，不需要大量自定义的项目
+
+无论选择哪种方式，PDF.JS都提供了强大的API和功能，可以满足大多数web应用的PDF渲染需求。
