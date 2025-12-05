@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.JS 核心库集成示例</title>
+    <style>
+        #canvas-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            max-width: 800px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="controls">
+        <button id="prev-page">上一页</button>
+        <button id="next-page">下一页</button>
+        <span id="page-info">页码: 1 / </span>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="pdf-canvas"></canvas>
+    </div>
+
+    <!-- 引入PDF.JS核心库 -->
+    <script type="module">
+        // 配置worker路径 - 使用HTTP服务器路径
+        import * as pdfjsLib from '/build/dev/build/pdf.mjs';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/build/dev/build/pdf.worker.mjs';
+
+        // 获取DOM元素
+        const canvas = document.getElementById('pdf-canvas');
+        const prevPageBtn = document.getElementById('prev-page');
+        const nextPageBtn = document.getElementById('next-page');
+        const pageInfo = document.getElementById('page-info');
+
+        // 渲染参数
+        let pdfDoc = null;
+        let currentPage = 1;
+        const scale = 1.5;
+
+        // 异步加载PDF文件
+        async function loadPdf() {
+            try {
+                // 加载PDF文件 - 使用HTTP服务器路径
+                const pdfUrl = '/web/test.pdf'; // 使用PDF.JS自带的测试文件
+                pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+
+                // 更新页码信息
+                pageInfo.textContent = `页码: ${currentPage} / ${pdfDoc.numPages}`;
+
+                // 渲染第一页
+                await renderPage(currentPage);
+            } catch (error) {
+                console.error('加载PDF失败:', error);
+            }
+        }
+
+        // 渲染指定页码
+        async function renderPage(pageNum) {
+            try {
+                // 获取页面
+                const page = await pdfDoc.getPage(pageNum);
+
+                // 设置canvas尺寸
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                // 渲染到canvas
+                const ctx = canvas.getContext('2d');
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+
+                // 更新当前页码
+                currentPage = pageNum;
+                pageInfo.textContent = `页码: ${currentPage} / ${pdfDoc.numPages}`;
+            } catch (error) {
+                console.error('渲染页面失败:', error);
+            }
+        }
+
+        // 事件监听
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                renderPage(currentPage - 1);
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            if (currentPage < pdfDoc.numPages) {
+                renderPage(currentPage + 1);
+            }
+        });
+
+        // 初始化加载PDF
+        loadPdf();
+    </script>
+</body>
+
+</html>

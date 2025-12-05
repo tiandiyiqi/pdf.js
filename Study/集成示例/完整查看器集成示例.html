@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.JS 完整查看器集成示例</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        .viewer-container {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+
+        .controls {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+        }
+
+        input[type="text"] {
+            width: 300px;
+            padding: 5px;
+        }
+
+        button {
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="controls">
+        <h3>PDF.JS 查看器集成示例</h3>
+        <input type="text" id="pdf-url" placeholder="输入PDF文件URL" value="../../study/PDF samples/test.pdf">
+        <button id="load-pdf">加载PDF</button>
+        <p>说明：此示例集成了完整的PDF.JS查看器，包括工具栏、侧边栏等UI组件。</p>
+    </div>
+
+    <!-- 使用iframe集成完整PDF.JS查看器 -->
+    <iframe id="pdf-viewer" class="viewer-container"></iframe>
+
+    <script>
+        // 配置对象 - 提高代码可维护性
+        const config = {
+            defaultPdfUrl: '../../study/PDF samples/test.pdf',
+            viewerPath: '/web/viewer.html'
+        };
+
+        // 获取DOM元素
+        const pdfUrlInput = document.getElementById('pdf-url');
+        const loadPdfBtn = document.getElementById('load-pdf');
+        const pdfViewer = document.getElementById('pdf-viewer');
+
+        // 初始化函数 - 页面加载时自动设置默认PDF
+        function initializeViewer() {
+            // 设置输入框默认值
+            pdfUrlInput.value = config.defaultPdfUrl;
+
+            // 自动加载默认PDF
+            loadPdf();
+        }
+
+        // 加载PDF文件的函数
+        function loadPdf() {
+            const pdfUrl = pdfUrlInput.value || config.defaultPdfUrl;
+            if (pdfUrl) {
+                // 使用URL参数传递PDF文件路径
+                // 需要对URL进行编码，特别是包含特殊字符时
+                const encodedPdfUrl = encodeURIComponent(pdfUrl);
+                pdfViewer.src = `${config.viewerPath}?file=${encodedPdfUrl}`;
+
+                console.log('正在加载PDF:', pdfUrl);
+            }
+        }
+
+        // 事件监听
+        loadPdfBtn.addEventListener('click', loadPdf);
+
+        // 回车加载
+        pdfUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadPdf();
+            }
+        });
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', initializeViewer);
+    </script>
+</body>
+
+</html>
