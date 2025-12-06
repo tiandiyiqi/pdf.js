@@ -1088,8 +1088,11 @@ class PartialEvaluator {
       switch (key) {
         case "OP":
         case "op":
+          // Only set hasOverprint to true if the value is actually true
+          hasOverprint = !!value;
+          break;
         case "OPM":
-          hasOverprint = true;
+          // OPM is overprint mode, doesn't affect whether overprint is enabled
           break;
         case "BM":
           bmValue = value;
