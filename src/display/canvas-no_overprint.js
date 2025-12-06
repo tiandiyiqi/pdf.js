@@ -363,11 +363,6 @@ class CanvasExtraState {
 
   transferMaps = "none";
 
-  // Composite operations for fill and stroke
-  fillCompositeOperation = "source-over";
-
-  strokeCompositeOperation = "source-over";
-
   constructor(width, height, preInit) {
     preInit?.(this);
 
@@ -379,8 +374,6 @@ class CanvasExtraState {
     const clone = Object.create(this);
     clone.clipBox = this.clipBox.slice();
     clone.minMax = this.minMax.slice();
-    clone.fillCompositeOperation = this.fillCompositeOperation;
-    clone.strokeCompositeOperation = this.strokeCompositeOperation;
     return clone;
   }
 
@@ -1215,24 +1208,6 @@ class CanvasGraphics {
             opIdx
           );
           this.ctx.globalCompositeOperation = value;
-          // Also set both fill and stroke composite operations to maintain
-          // backward compatibility
-          this.current.fillCompositeOperation = value;
-          this.current.strokeCompositeOperation = value;
-          break;
-        case "fillBM":
-          this.dependencyTracker?.recordSimpleData(
-            "fillCompositeOperation",
-            opIdx
-          );
-          this.current.fillCompositeOperation = value;
-          break;
-        case "strokeBM":
-          this.dependencyTracker?.recordSimpleData(
-            "strokeCompositeOperation",
-            opIdx
-          );
-          this.current.strokeCompositeOperation = value;
           break;
         case "SMask":
           this.dependencyTracker?.recordSimpleData("SMask", opIdx);
@@ -1534,12 +1509,8 @@ class CanvasGraphics {
     const ctx = this.ctx;
     const strokeColor = this.current.strokeColor;
     // For stroke we want to temporarily change the global alpha to the
-    // stroking alpha and the composite operation to the stroke composite
-    // operation.
+    // stroking alpha.
     ctx.globalAlpha = this.current.strokeAlpha;
-    const originalCompositeOperation = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = this.current.strokeCompositeOperation;
-
     if (this.contentVisible) {
       if (typeof strokeColor === "object" && strokeColor?.getPattern) {
         const baseTransform = strokeColor.isModifyingCurrentTransform()
@@ -1581,10 +1552,8 @@ class CanvasGraphics {
       );
     }
 
-    // Restore the global alpha to the fill alpha and the composite
-    // operation to the original
+    // Restore the global alpha to the fill alpha
     ctx.globalAlpha = this.current.fillAlpha;
-    ctx.globalCompositeOperation = originalCompositeOperation;
   }
 
   closeStroke(opIdx, path) {
@@ -1596,11 +1565,6 @@ class CanvasGraphics {
     const fillColor = this.current.fillColor;
     const isPatternFill = this.current.patternFill;
     let needRestore = false;
-
-    // For fill operations, temporarily set the composite operation to the
-    // fill composite operation
-    const originalCompositeOperation = ctx.globalCompositeOperation;
-    ctx.globalCompositeOperation = this.current.fillCompositeOperation;
 
     if (isPatternFill) {
       const baseTransform = fillColor.isModifyingCurrentTransform()
@@ -1642,10 +1606,6 @@ class CanvasGraphics {
       ctx.restore();
       this.dependencyTracker?.restore(opIdx);
     }
-
-    // Restore the original composite operation
-    ctx.globalCompositeOperation = originalCompositeOperation;
-
     if (consumePath) {
       this.consumePath(opIdx, path, intersect);
     }

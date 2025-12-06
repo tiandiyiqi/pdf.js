@@ -83,6 +83,13 @@ export default [
       sourceType: "module",
     },
 
+    settings: {
+      "import/resolver": {
+        node: {
+          extensions: [".js", ".mjs"],
+        },
+      },
+    },
     rules: {
       "import/export": "error",
       "import/exports-last": "error",
