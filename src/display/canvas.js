@@ -667,7 +667,7 @@ class CanvasGraphics {
     annotationCanvasMap,
     pageColors,
     dependencyTracker,
-    overprintOption = true
+    overprintOption = false
   ) {
     this.ctx = canvasCtx;
     this.overprintOption = overprintOption;
@@ -3358,9 +3358,21 @@ class CanvasGraphics {
     } = this;
     const [scaleX, scaleY] = this.getScaleForStroking();
 
+    // For overprint operations, temporarily set the composite operation to the
+    // stroke composite operation
+    const originalCompositeOperation = ctx.globalCompositeOperation;
+    if (this.overprintOption) {
+      ctx.globalCompositeOperation = this.current.strokeCompositeOperation;
+    }
+
     if (scaleX === scaleY) {
       ctx.lineWidth = (lineWidth || 1) * scaleX;
       ctx.stroke(path);
+
+      // Restore the original composite operation
+      if (this.overprintOption) {
+        ctx.globalCompositeOperation = originalCompositeOperation;
+      }
       return;
     }
 
@@ -3393,6 +3405,11 @@ class CanvasGraphics {
 
     if (saveRestore) {
       ctx.restore();
+    }
+
+    // Restore the original composite operation
+    if (this.overprintOption) {
+      ctx.globalCompositeOperation = originalCompositeOperation;
     }
   }
 

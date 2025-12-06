@@ -201,6 +201,11 @@ const defaultOptions = {
     value: "",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  overprintOption: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.VIEWER + OptionKind.API,
+  },
   disableHistory: {
     /** @type {boolean} */
     value: false,

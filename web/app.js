@@ -195,6 +195,50 @@ const PDFViewerApplication = {
   editorUndoBar: null,
   _printPermissionPromise: null,
 
+  initializeOverprintOption() {
+    const overprintOptionCheckbox = document.getElementById("overprintOption");
+    const overprintOptionButton = document.getElementById(
+      "overprintOptionButton"
+    );
+
+    if (overprintOptionCheckbox && overprintOptionButton) {
+      // 设置初始值
+      const initialValue = AppOptions.get("overprintOption");
+      overprintOptionCheckbox.checked = initialValue;
+      this.updateOverprintButton(overprintOptionButton, initialValue);
+
+      // 按钮点击事件
+      overprintOptionButton.addEventListener("click", () => {
+        const newValue = !overprintOptionCheckbox.checked;
+        overprintOptionCheckbox.checked = newValue;
+        this.setOverprintOption(newValue);
+        this.updateOverprintButton(overprintOptionButton, newValue);
+      });
+
+      // 复选框变化事件（备用）
+      overprintOptionCheckbox.addEventListener("change", event => {
+        this.setOverprintOption(event.target.checked);
+        this.updateOverprintButton(overprintOptionButton, event.target.checked);
+      });
+    }
+  },
+
+  updateOverprintButton(buttonElement, enabled) {
+    if (enabled) {
+      buttonElement.classList.remove("disabled");
+    } else {
+      buttonElement.classList.add("disabled");
+    }
+  },
+
+  setOverprintOption(enabled) {
+    AppOptions.set("overprintOption", enabled);
+    // 重新渲染当前页面
+    if (this.pdfViewer) {
+      this.pdfViewer.forceRendering();
+    }
+  },
+
   // Called once when the document is loaded.
   async initialize(appConfig) {
     this.appConfig = appConfig;
@@ -206,6 +250,8 @@ const PDFViewerApplication = {
     } catch (ex) {
       console.error("initialize:", ex);
     }
+
+    this.initializeOverprintOption();
     if (AppOptions.get("pdfBugEnabled")) {
       await this._parseHashParams();
     }
@@ -788,6 +834,14 @@ const PDFViewerApplication = {
       const queryString = document.location.search.substring(1);
       const params = parseQueryString(queryString);
       file = params.get("file") ?? AppOptions.get("defaultUrl");
+
+      // 处理overprintOption URL参数
+      const overprintOptionParam = params.get("overprintOption");
+      if (overprintOptionParam !== null) {
+        const overprintOptionValue = overprintOptionParam === "true";
+        AppOptions.set("overprintOption", overprintOptionValue);
+      }
+
       try {
         file = new URL(decodeURIComponent(file)).href;
       } catch {

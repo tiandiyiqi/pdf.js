@@ -36,6 +36,9 @@
         <button id="prev-page">上一页</button>
         <button id="next-page">下一页</button>
         <span id="page-info">页码: 1 / </span>
+        <label style="margin-left: 20px;">
+            <input type="checkbox" id="overprint-option" checked> 叠印预览
+        </label>
     </div>
 
     <div id="canvas-container">
@@ -53,6 +56,7 @@
         const prevPageBtn = document.getElementById('prev-page');
         const nextPageBtn = document.getElementById('next-page');
         const pageInfo = document.getElementById('page-info');
+        const overprintOption = document.getElementById('overprint-option');
 
         // 渲染参数
         let pdfDoc = null;
@@ -63,7 +67,7 @@
         async function loadPdf() {
             try {
                 // 加载PDF文件 - 使用HTTP服务器路径
-                const pdfUrl = '/web/test.pdf'; // 使用PDF.JS自带的测试文件
+                const pdfUrl = '../../study/PDF samples/design-1.pdf'; // 使用项目中的测试文件
                 pdfDoc = await pdfjsLib.getDocument(pdfUrl).promise;
 
                 // 更新页码信息
@@ -91,7 +95,8 @@
                 const ctx = canvas.getContext('2d');
                 const renderContext = {
                     canvasContext: ctx,
-                    viewport: viewport
+                    viewport: viewport,
+                    overprintOption: overprintOption.checked
                 };
 
                 await page.render(renderContext).promise;
@@ -114,6 +119,13 @@
         nextPageBtn.addEventListener('click', () => {
             if (currentPage < pdfDoc.numPages) {
                 renderPage(currentPage + 1);
+            }
+        });
+
+        // 叠印选项切换事件
+        overprintOption.addEventListener('change', () => {
+            if (pdfDoc) {
+                renderPage(currentPage); // 重新渲染当前页
             }
         });
 

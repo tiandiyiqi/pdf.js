@@ -947,6 +947,7 @@ class PDFPageView extends BasePDFPageView {
       pageColors: this.pageColors,
       isEditing: this.#isEditing,
       recordOperations,
+      overprintOption: AppOptions.get("overprintOption"),
     };
   }
 

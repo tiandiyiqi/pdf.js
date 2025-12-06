@@ -125,6 +125,8 @@
   --toolbarButton-viewLayers-icon: url(images/toolbarButton-viewLayers.svg);
   --toolbarButton-currentOutlineItem-icon: url(images/toolbarButton-currentOutlineItem.svg);
   --toolbarButton-search-icon: url(images/toolbarButton-search.svg);
+  --toolbarButton-overprintOption-icon: url(images/op_color.svg);
+  --toolbarButton-overprintOption-disabled-icon: url(images/op_gray.svg);
   --findbarButton-previous-icon: url(images/findbarButton-previous.svg);
   --findbarButton-next-icon: url(images/findbarButton-next.svg);
   --secondaryToolbarButton-firstPage-icon: url(images/secondaryToolbarButton-firstPage.svg);
@@ -1065,6 +1067,27 @@ dialog :link {
       display: inline-block;
       width: max-content;
       height: auto;
+    }
+  }
+
+  /* 叠印按钮特定样式 */
+  &#overprintOptionButton {
+    &::before {
+      background-image: var(--toolbarButton-overprintOption-icon);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      mask-image: none;
+      background-color: transparent;
+    }
+
+    &.disabled::before {
+      background-image: var(--toolbarButton-overprintOption-disabled-icon);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      mask-image: none;
+      background-color: transparent;
     }
   }
 }

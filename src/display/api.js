@@ -1463,6 +1463,7 @@ class PDFPageProxy {
     isEditing = false,
     recordOperations = false,
     operationsFilter = null,
+    overprintOption = false,
   }) {
     this._stats?.time("Overall");
 
@@ -1578,6 +1579,7 @@ class PDFPageProxy {
         viewport,
         transform,
         background,
+        overprintOption,
       },
       objs: this.objs,
       commonObjs: this.commonObjs,
@@ -3276,7 +3278,13 @@ class InternalRenderTask {
       this.stepper.init(this.operatorList);
       this.stepper.nextBreakPoint = this.stepper.getNextBreakPoint();
     }
-    const { viewport, transform, background, dependencyTracker } = this.params;
+    const {
+      viewport,
+      transform,
+      background,
+      dependencyTracker,
+      overprintOption,
+    } = this.params;
 
     // When printing in Firefox, we get a specific context in mozPrintCallback
     // which cannot be created from the canvas itself.
@@ -3296,7 +3304,8 @@ class InternalRenderTask {
       { optionalContentConfig },
       this.annotationCanvasMap,
       this.pageColors,
-      dependencyTracker
+      dependencyTracker,
+      overprintOption
     );
     this.gfx.beginDrawing({
       transform,
