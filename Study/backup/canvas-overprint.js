@@ -363,17 +363,16 @@ class CanvasExtraState {
 
   transferMaps = "none";
 
-  // Composite operations for fill and stroke (overprint support)
+  // Composite operations for fill and stroke
   fillCompositeOperation = "source-over";
 
   strokeCompositeOperation = "source-over";
 
-  constructor(width, height, preInit, overprintEnabled = false) {
+  constructor(width, height, preInit) {
     preInit?.(this);
 
     this.clipBox = new Float32Array([0, 0, width, height]);
     this.minMax = MIN_MAX_INIT.slice();
-    this.overprintEnabled = overprintEnabled;
   }
 
   clone() {
@@ -382,7 +381,6 @@ class CanvasExtraState {
     clone.minMax = this.minMax.slice();
     clone.fillCompositeOperation = this.fillCompositeOperation;
     clone.strokeCompositeOperation = this.strokeCompositeOperation;
-    clone.overprintEnabled = this.overprintEnabled;
     return clone;
   }
 
@@ -666,16 +664,12 @@ class CanvasGraphics {
     { optionalContentConfig, markedContentStack = null },
     annotationCanvasMap,
     pageColors,
-    dependencyTracker,
-    overprintOption = true
+    dependencyTracker
   ) {
     this.ctx = canvasCtx;
-    this.overprintOption = overprintOption;
     this.current = new CanvasExtraState(
       this.ctx.canvas.width,
-      this.ctx.canvas.height,
-      null,
-      this.overprintOption
+      this.ctx.canvas.height
     );
     this.stateStack = [];
     this.pendingClip = null;
@@ -1220,31 +1214,25 @@ class CanvasGraphics {
             "globalCompositeOperation",
             opIdx
           );
-          if (this.overprintOption) {
-            this.ctx.globalCompositeOperation = value;
-            // Also set both fill and stroke composite operations to maintain
-            // backward compatibility
-            this.current.fillCompositeOperation = value;
-            this.current.strokeCompositeOperation = value;
-          }
+          this.ctx.globalCompositeOperation = value;
+          // Also set both fill and stroke composite operations to maintain
+          // backward compatibility
+          this.current.fillCompositeOperation = value;
+          this.current.strokeCompositeOperation = value;
           break;
         case "fillBM":
-          if (this.overprintOption) {
-            this.dependencyTracker?.recordSimpleData(
-              "fillCompositeOperation",
-              opIdx
-            );
-            this.current.fillCompositeOperation = value;
-          }
+          this.dependencyTracker?.recordSimpleData(
+            "fillCompositeOperation",
+            opIdx
+          );
+          this.current.fillCompositeOperation = value;
           break;
         case "strokeBM":
-          if (this.overprintOption) {
-            this.dependencyTracker?.recordSimpleData(
-              "strokeCompositeOperation",
-              opIdx
-            );
-            this.current.strokeCompositeOperation = value;
-          }
+          this.dependencyTracker?.recordSimpleData(
+            "strokeCompositeOperation",
+            opIdx
+          );
+          this.current.strokeCompositeOperation = value;
           break;
         case "SMask":
           this.dependencyTracker?.recordSimpleData("SMask", opIdx);
@@ -1550,9 +1538,7 @@ class CanvasGraphics {
     // operation.
     ctx.globalAlpha = this.current.strokeAlpha;
     const originalCompositeOperation = ctx.globalCompositeOperation;
-    if (this.overprintOption) {
-      ctx.globalCompositeOperation = this.current.strokeCompositeOperation;
-    }
+    ctx.globalCompositeOperation = this.current.strokeCompositeOperation;
 
     if (this.contentVisible) {
       if (typeof strokeColor === "object" && strokeColor?.getPattern) {
@@ -1598,9 +1584,7 @@ class CanvasGraphics {
     // Restore the global alpha to the fill alpha and the composite
     // operation to the original
     ctx.globalAlpha = this.current.fillAlpha;
-    if (this.overprintOption) {
-      ctx.globalCompositeOperation = originalCompositeOperation;
-    }
+    ctx.globalCompositeOperation = originalCompositeOperation;
   }
 
   closeStroke(opIdx, path) {
@@ -1616,9 +1600,7 @@ class CanvasGraphics {
     // For fill operations, temporarily set the composite operation to the
     // fill composite operation
     const originalCompositeOperation = ctx.globalCompositeOperation;
-    if (this.overprintOption) {
-      ctx.globalCompositeOperation = this.current.fillCompositeOperation;
-    }
+    ctx.globalCompositeOperation = this.current.fillCompositeOperation;
 
     if (isPatternFill) {
       const baseTransform = fillColor.isModifyingCurrentTransform()
@@ -1662,9 +1644,7 @@ class CanvasGraphics {
     }
 
     // Restore the original composite operation
-    if (this.overprintOption) {
-      ctx.globalCompositeOperation = originalCompositeOperation;
-    }
+    ctx.globalCompositeOperation = originalCompositeOperation;
 
     if (consumePath) {
       this.consumePath(opIdx, path, intersect);
