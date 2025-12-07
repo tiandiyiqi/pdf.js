@@ -40,6 +40,8 @@
         <h3>PDF.JS 查看器集成示例</h3>
         <input type="text" id="pdf-url" placeholder="输入PDF文件URL" value="../../study/PDF samples/test4.pdf">
         <button id="load-pdf">加载PDF</button>
+        <button id="toggle-overprint"
+            style="background-color: #4CAF50; color: white; border: none; padding: 5px 10px; margin-left: 10px; cursor: pointer;">禁用叠印</button>
         <p>说明：此示例集成了完整的PDF.JS查看器，包括工具栏、侧边栏等UI组件。叠印效果已默认启用。</p>
     </div>
 
@@ -53,10 +55,19 @@
             viewerPath: '/web/viewer.html'
         };
 
+        // 消息类型常量
+        const MESSAGE_TYPES = {
+            SET_OVERPRINT_OPTION: 'setOverprintOption',
+            OVERPRINT_OPTION_CHANGED: 'overprintOptionChanged'
+        };
+
         // 获取DOM元素
         const pdfUrlInput = document.getElementById('pdf-url');
         const loadPdfBtn = document.getElementById('load-pdf');
         const pdfViewer = document.getElementById('pdf-viewer');
+
+        // 叠印控制状态
+        let overprintEnabled = true;
 
         // 初始化函数 - 页面加载时自动设置默认PDF
         function initializeViewer() {
@@ -65,23 +76,88 @@
 
             // 自动加载默认PDF
             loadPdf();
+
+            // 监听iframe加载完成事件
+            pdfViewer.addEventListener('load', function () {
+                console.log('PDF查看器已加载');
+                // 向iframe发送叠印状态
+                setTimeout(() => {
+                    sendOverprintOptionToIframe(overprintEnabled);
+                }, 1000);
+            });
+
+            // 监听来自iframe的消息
+            window.addEventListener('message', function (event) {
+                // 验证消息来源
+                if (event.origin !== window.location.origin) {
+                    return;
+                }
+
+                if (event.data && event.data.type === MESSAGE_TYPES.OVERPRINT_OPTION_CHANGED) {
+                    // 同步iframe中的叠印状态变化
+                    overprintEnabled = event.data.enabled;
+                    updateOverprintButtonDisplay();
+                    console.log('叠印状态已同步:', overprintEnabled);
+                }
+            });
+        }
+
+        // 向iframe发送叠印选项消息
+        function sendOverprintOptionToIframe(enabled) {
+            try {
+                pdfViewer.contentWindow.postMessage({
+                    type: MESSAGE_TYPES.SET_OVERPRINT_OPTION,
+                    enabled: enabled
+                }, '*'); // 使用通配符，实际应用中应指定具体源
+                console.log('叠印状态消息已发送:', enabled);
+            } catch (error) {
+                console.warn('无法发送消息到iframe:', error.message);
+            }
         }
 
         // 加载PDF文件的函数
         function loadPdf() {
             const pdfUrl = pdfUrlInput.value || config.defaultPdfUrl;
             if (pdfUrl) {
-                // 使用URL参数传递PDF文件路径和叠印选项（默认启用叠印效果）
-                // 需要对URL进行编码，特别是包含特殊字符时
+                // 使用URL参数传递PDF文件路径和叠印选项
                 const encodedPdfUrl = encodeURIComponent(pdfUrl);
-                pdfViewer.src = `${config.viewerPath}?file=${encodedPdfUrl}&overprintOption=true`;
+                const overprintParam = overprintEnabled ? 'true' : 'false';
+                pdfViewer.src = `${config.viewerPath}?file=${encodedPdfUrl}&overprintOption=${overprintParam}`;
 
-                console.log('正在加载PDF:', pdfUrl, '叠印效果: 已启用');
+                console.log('正在加载PDF:', pdfUrl, '叠印效果:', overprintEnabled ? '已启用' : '已禁用');
             }
+        }
+
+        // 更新叠印按钮显示
+        function updateOverprintButtonDisplay() {
+            const overprintBtn = document.getElementById('toggle-overprint');
+            if (overprintBtn) {
+                overprintBtn.textContent = overprintEnabled ? '禁用叠印' : '启用叠印';
+                overprintBtn.style.backgroundColor = overprintEnabled ? '#4CAF50' : '#f44336';
+            }
+        }
+
+        // 切换叠印状态的函数
+        function toggleOverprint() {
+            overprintEnabled = !overprintEnabled;
+
+            // 更新按钮显示
+            updateOverprintButtonDisplay();
+
+            // 优先使用postMessage通信，避免重新加载PDF
+            sendOverprintOptionToIframe(overprintEnabled);
+
+            console.log('叠印状态已切换:', overprintEnabled ? '启用' : '禁用');
         }
 
         // 事件监听
         loadPdfBtn.addEventListener('click', loadPdf);
+
+        // 叠印控制按钮事件
+        const toggleOverprintBtn = document.getElementById('toggle-overprint');
+        if (toggleOverprintBtn) {
+            toggleOverprintBtn.addEventListener('click', toggleOverprint);
+        }
 
         // 回车加载
         pdfUrlInput.addEventListener('keypress', (e) => {

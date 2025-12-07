@@ -239,6 +239,58 @@ const PDFViewerApplication = {
     }
   },
 
+  // 处理来自父页面的消息
+  handleParentMessage(event) {
+    // 验证消息来源，确保安全（允许localhost和同源）
+    const allowedOrigins = [
+      window.location.origin,
+      "http://localhost:8888",
+      "http://127.0.0.1:8888",
+    ];
+
+    if (!allowedOrigins.includes(event.origin)) {
+      console.warn("拒绝来自未知源的消息:", event.origin);
+      return;
+    }
+
+    const data = event.data;
+    if (!data || typeof data !== "object") {
+      console.warn("无效的消息数据格式");
+      return;
+    }
+
+    // 处理叠印选项设置请求
+    if (
+      data.type === "setOverprintOption" &&
+      typeof data.enabled === "boolean"
+    ) {
+      console.log("收到叠印选项设置请求:", data.enabled);
+      this.setOverprintOption(data.enabled);
+
+      // 更新内部按钮状态
+      const overprintOptionButton = document.getElementById(
+        "overprintOptionButton"
+      );
+      const overprintOptionCheckbox =
+        document.getElementById("overprintOption");
+      if (overprintOptionButton && overprintOptionCheckbox) {
+        overprintOptionCheckbox.checked = data.enabled;
+        this.updateOverprintButton(overprintOptionButton, data.enabled);
+      }
+
+      // 向父页面发送状态变化确认
+      window.parent.postMessage(
+        {
+          type: "overprintOptionChanged",
+          enabled: data.enabled,
+        },
+        "*"
+      );
+
+      console.log("叠印选项已通过消息设置:", data.enabled);
+    }
+  },
+
   // Called once when the document is loaded.
   async initialize(appConfig) {
     this.appConfig = appConfig;
@@ -2253,6 +2305,11 @@ const PDFViewerApplication = {
       pdfViewer,
       _windowAbortController: { signal },
     } = this;
+
+    // 添加消息监听器，处理来自父页面的叠印控制请求
+    window.addEventListener("message", this.handleParentMessage.bind(this), {
+      signal,
+    });
 
     this._touchManager = new TouchManager({
       container: window,
