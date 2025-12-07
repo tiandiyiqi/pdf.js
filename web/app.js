@@ -235,6 +235,15 @@ const PDFViewerApplication = {
     AppOptions.set("overprintOption", enabled);
     // 重新渲染当前页面
     if (this.pdfViewer) {
+      // 获取当前可见页面
+      const visiblePages = this.pdfViewer._getVisiblePages();
+      // 重置可见页面的渲染状态，强制重新渲染
+      for (const { view } of visiblePages.views) {
+        if (view.renderingState === RenderingStates.FINISHED) {
+          view.reset({ keepCanvasWrapper: true });
+        }
+      }
+      // 触发重新渲染
       this.pdfViewer.forceRendering();
     }
   },
