@@ -203,7 +203,7 @@ const PDFViewerApplication = {
 
     if (overprintOptionCheckbox && overprintOptionButton) {
       // 设置初始值
-      const initialValue = AppOptions.get("overprintOption");
+      const initialValue = false;
       overprintOptionCheckbox.checked = initialValue;
       this.updateOverprintButton(overprintOptionButton, initialValue);
 
