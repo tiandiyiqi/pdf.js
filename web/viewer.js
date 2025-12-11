@@ -115,11 +115,13 @@ function getViewerConfiguration() {
       outlineButton: document.getElementById("viewOutline"),
       attachmentsButton: document.getElementById("viewAttachments"),
       layersButton: document.getElementById("viewLayers"),
+      inkListButton: document.querySelector('.toolbarImage[src*="sc-1.svg"]'),
       // Views
       thumbnailView: document.getElementById("thumbnailView"),
       outlineView: document.getElementById("outlineView"),
       attachmentsView: document.getElementById("attachmentsView"),
       layersView: document.getElementById("layersView"),
+      inksView: document.getElementById("inksView"),
       // View-specific options
       currentOutlineItemButton: document.getElementById("currentOutlineItem"),
     },

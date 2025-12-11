@@ -92,6 +92,7 @@ import { PDFSidebar } from "web-pdf_sidebar";
 import { PdfTextExtractor } from "./pdf_text_extractor.js";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
 import { PDFViewer } from "./pdf_viewer.js";
+import { PDFInkListViewer } from "web-pdf_ink_list_viewer";
 import { Preferences } from "web-preferences";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { SignatureManager } from "web-signature_manager";
@@ -142,6 +143,8 @@ const PDFViewerApplication = {
   pdfAttachmentViewer: null,
   /** @type {PDFLayerViewer} */
   pdfLayerViewer: null,
+  /** @type {PDFInkListViewer} */
+  pdfInkListViewer: null,
   /** @type {PDFCursorTools} */
   pdfCursorTools: null,
   /** @type {PDFScriptingManager} */
@@ -863,6 +866,16 @@ const PDFViewerApplication = {
       });
     }
 
+    if (appConfig.sidebar?.inksView) {
+      this.pdfInkListViewer = new PDFInkListViewer({
+        container: appConfig.sidebar.inksView,
+        eventBus,
+        l10n,
+      });
+      // Render initial ink list with demo data
+      this.pdfInkListViewer.render();
+    }
+
     if (appConfig.sidebar) {
       this.pdfSidebar = new PDFSidebar({
         elements: appConfig.sidebar,
@@ -1289,6 +1302,7 @@ const PDFViewerApplication = {
     this.pdfOutlineViewer?.reset();
     this.pdfAttachmentViewer?.reset();
     this.pdfLayerViewer?.reset();
+    this.pdfInkListViewer?.reset();
 
     this.pdfHistory?.reset();
     this.findBar?.reset();
@@ -1663,6 +1677,9 @@ const PDFViewerApplication = {
             spreadMode,
           });
           this.eventBus.dispatch("documentinit", { source: this });
+
+          // 重新渲染油墨列表，显示初始CMYK数据
+          this.pdfInkListViewer?.render();
 
           // For documents with different page sizes, once all pages are
           // resolved, ensure that the correct location becomes visible on load.

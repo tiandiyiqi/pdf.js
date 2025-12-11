@@ -213,6 +213,7 @@ function createWebpackAlias(defines) {
     "web-pdf_presentation_mode": "web/pdf_presentation_mode.js",
     "web-pdf_sidebar": "web/pdf_sidebar.js",
     "web-pdf_thumbnail_viewer": "web/pdf_thumbnail_viewer.js",
+    "web-pdf_ink_list_viewer": "web/pdf_ink_list_viewer.js",
     "web-preferences": "",
     "web-print_service": "",
     "web-secondary_toolbar": "web/secondary_toolbar.js",

@@ -54,6 +54,8 @@ const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
  *   the attachments view.
  * @property {HTMLButtonElement} layersButton - The button used to show
  *   the layers view.
+ * @property {HTMLImageElement} inkListButton - The button (image) used to show
+ *   the ink list view.
  * @property {HTMLDivElement} thumbnailView - The container in which
  *   the thumbnails are placed.
  * @property {HTMLDivElement} outlineView - The container in which
@@ -62,6 +64,8 @@ const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
  *   the attachments are placed.
  * @property {HTMLDivElement} layersView - The container in which
  *   the layers are placed.
+ * @property {HTMLDivElement} inksView - The container in which
+ *   the ink list is placed.
  * @property {HTMLButtonElement} currentOutlineItemButton - The button used to
  *   find the current outline item.
  */
@@ -100,11 +104,13 @@ class PDFSidebar {
     this.outlineButton = elements.outlineButton;
     this.attachmentsButton = elements.attachmentsButton;
     this.layersButton = elements.layersButton;
+    this.inkListButton = elements.inkListButton;
 
     this.thumbnailView = elements.thumbnailView;
     this.outlineView = elements.outlineView;
     this.attachmentsView = elements.attachmentsView;
     this.layersView = elements.layersView;
+    this.inksView = elements.inksView;
 
     this._currentOutlineItemButton = elements.currentOutlineItemButton;
 
@@ -195,6 +201,9 @@ class PDFSidebar {
           return;
         }
         break;
+      case SidebarView.INK:
+        // No disabled state for ink list button
+        break;
       default:
         console.error(`PDFSidebar.switchView: "${view}" is not a valid view.`);
         return;
@@ -223,6 +232,11 @@ class PDFSidebar {
       this.layersButton,
       view === SidebarView.LAYERS,
       this.layersView
+    );
+    toggleCheckedBtn(
+      this.inkListButton,
+      view === SidebarView.INK,
+      this.inksView
     );
 
     if (forceOpen && !this.isOpen) {
@@ -359,6 +373,13 @@ class PDFSidebar {
     this.layersButton.addEventListener("dblclick", () => {
       eventBus.dispatch("resetlayers", { source: this });
     });
+
+    // Ink list button
+    if (this.inkListButton) {
+      this.inkListButton.addEventListener("click", () => {
+        this.switchView(SidebarView.INK);
+      });
+    }
 
     // Buttons for view-specific options.
     this._currentOutlineItemButton.addEventListener("click", () => {

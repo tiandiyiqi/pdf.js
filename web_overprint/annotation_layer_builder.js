@@ -134,6 +134,10 @@ class AnnotationLayerBuilder {
       this.annotationLayer.update({
         viewport: viewport.clone({ dontFlip: true }),
       });
+      // Ensure annotations are loaded for injectLinkAnnotations
+      if (this.#annotations === null) {
+        this.#annotations = await this.pdfPage.getAnnotations({ intent });
+      }
       return;
     }
 
@@ -230,14 +234,22 @@ class AnnotationLayerBuilder {
    *   are added to the annotation layer.
    */
   async injectLinkAnnotations(inferredLinks) {
-    if (this.#annotations === null) {
-      throw new Error(
-        "`render` method must be called before `injectLinkAnnotations`."
-      );
-    }
     if (this._cancelled || this.#linksInjected) {
       return;
     }
+
+    // 如果annotations尚未初始化，先获取注释
+    if (this.#annotations === null) {
+      try {
+        this.#annotations = await this.pdfPage.getAnnotations({
+          intent: "display",
+        });
+      } catch (ex) {
+        console.error("injectLinkAnnotations: 获取注释失败:", ex);
+        return;
+      }
+    }
+
     this.#linksInjected = true;
 
     const newLinks = this.#annotations.length

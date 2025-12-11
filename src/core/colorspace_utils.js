@@ -256,9 +256,21 @@ class ColorSpaceUtils {
         case "DeviceN":
           const name = xref.fetchIfRef(cs[1]);
           numComps = Array.isArray(name) ? name.length : 1;
+          
+          // 提取通道名称
+          let channelNames = [];
+          if (Array.isArray(name)) {
+            // DeviceN颜色空间，name是通道名称数组
+            channelNames = name.map(n => typeof n === "string" ? n : (n instanceof Name ? n.name : String(n)));
+          } else if (typeof name === "string" || name instanceof Name) {
+            // Separation颜色空间，name是单个专色名称
+            channelNames = [typeof name === "string" ? name : name.name];
+          }
+          console.log(`[${new Date().toISOString()}] ColorSpaceUtils.#parse: 处理${mode}颜色空间，name:`, name, `channelNames:`, channelNames);
+          
           baseCS = this.#subParse(cs[2], options);
           const tintFn = pdfFunctionFactory.create(cs[3]);
-          return new AlternateCS(numComps, baseCS, tintFn);
+          return new AlternateCS(numComps, baseCS, tintFn, channelNames);
         case "Lab":
           params = xref.fetchIfRef(cs[1]);
           whitePoint = params.getArray("WhitePoint");

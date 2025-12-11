@@ -25,6 +25,7 @@ import {
   warn,
 } from "../shared/util.js";
 import { BaseStream } from "./base_stream.js";
+import { ColorConverter } from "./color_converter.js";
 
 /**
  * Resizes an RGB image with 3 components.
@@ -347,11 +348,31 @@ class ColorSpace {
  * The default color is `new Float32Array(new Array(numComps).fill(1))`.
  */
 class AlternateCS extends ColorSpace {
-  constructor(numComps, base, tintFn) {
+  constructor(numComps, base, tintFn, channelNames = []) {
     super("Alternate", numComps);
     this.base = base;
     this.tintFn = tintFn;
     this.tmpBuf = new Float32Array(base.numComps);
+    this.channelNames = channelNames;
+
+    // 检查是否是DeviceN或Separation颜色空间，自动注册专色
+    console.log(
+      `[${new Date().toISOString()}] AlternateCS.constructor: 创建AlternateCS实例，numComps: ${numComps}，channelNames:`,
+      channelNames
+    );
+
+    // 自动注册专色
+    if (channelNames.length > 0) {
+      const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
+      const spotNames = channelNames.filter(name => !cmykNames.includes(name));
+      console.log(
+        `[${new Date().toISOString()}] AlternateCS.constructor: 检测到专色名称:`,
+        spotNames
+      );
+      spotNames.forEach(spotName => {
+        ColorConverter.addSpotColor(spotName, true);
+      });
+    }
   }
 
   getRgbItem(src, srcOffset, dest, destOffset) {
@@ -663,10 +684,17 @@ class DeviceCmykCS extends ColorSpace {
   // CMYK color conversion using the estimation below:
   //   f(A, B,.. N) = Acc+Bcm+Ccy+Dck+c+Fmm+Gmy+Hmk+Im+Jyy+Kyk+Ly+Mkk+Nk+255
   #toRgb(src, srcOffset, srcScale, dest, destOffset) {
-    const c = src[srcOffset] * srcScale;
-    const m = src[srcOffset + 1] * srcScale;
-    const y = src[srcOffset + 2] * srcScale;
-    const k = src[srcOffset + 3] * srcScale;
+    let c = src[srcOffset] * srcScale;
+    let m = src[srcOffset + 1] * srcScale;
+    let y = src[srcOffset + 2] * srcScale;
+    let k = src[srcOffset + 3] * srcScale;
+
+    // Apply color filter
+    const filteredCMYK = ColorConverter.filterCMYK([c, m, y, k]);
+    c = filteredCMYK[0];
+    m = filteredCMYK[1];
+    y = filteredCMYK[2];
+    k = filteredCMYK[3];
 
     dest[destOffset] =
       255 +
