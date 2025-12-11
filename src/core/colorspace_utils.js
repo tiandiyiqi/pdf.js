@@ -259,11 +259,14 @@ class ColorSpaceUtils {
           baseCS = this.#subParse(cs[2], options);
           const tintFn = pdfFunctionFactory.create(cs[3]);
           // 新增：提取并传递通道名称
-          const channelNames = Array.isArray(name)
-            ? name.map(n => (n && n.name ? n.name : String(n)))
-            : name && name.name
-              ? [name.name]
-              : [String(name)];
+          let channelNames;
+          if (Array.isArray(name)) {
+            channelNames = name.map(n => (n && n.name ? n.name : String(n)));
+          } else if (name && name.name) {
+            channelNames = [name.name];
+          } else {
+            channelNames = [String(name)];
+          }
           return new AlternateCS(numComps, baseCS, tintFn, channelNames);
         case "Lab":
           params = xref.fetchIfRef(cs[1]);

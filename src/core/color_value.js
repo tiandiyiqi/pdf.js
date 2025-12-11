@@ -21,6 +21,7 @@
 
 import { ColorConverter } from "./color_converter.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
+import { warn } from "../shared/util.js";
 
 /**
  * 颜色空间类型枚举
@@ -220,7 +221,7 @@ class ColorValue {
         return ColorConverter.grayToRgb(this.channels.gray);
 
       default:
-        console.warn(`ColorValue: Unknown color space ${this.colorSpace}`);
+        warn(`ColorValue: Unknown color space ${this.colorSpace}`);
         return "#000000";
     }
   }
@@ -372,7 +373,14 @@ class ColorValueBuilder {
 
     // 重要：使用PDF.js原始的CMYK转换方法（SWOP色彩空间）
     // 而不是简化的标准公式，以确保颜色准确性
-    const rgbFallback = ColorSpaceUtils.cmyk.getRgbHex(cmyk, 0);
+    let rgbFallback;
+    try {
+      rgbFallback = ColorSpaceUtils.cmyk.getRgbHex(cmyk, 0);
+    } catch (e) {
+      // 如果ICC转换失败，使用简化的CMYK转换公式作为回退
+      warn(`CMYK to RGB conversion failed: ${e}, using fallback`);
+      rgbFallback = ColorConverter.cmykToRgb(cmyk);
+    }
 
     return new ColorValue({
       colorSpace: ColorSpace.CMYK,
@@ -400,7 +408,8 @@ class ColorValueBuilder {
 
   /**
    * 创建DeviceN颜色值
-   * @param {Array<string>} channelNames - 通道名称列表，如 ['Cyan', 'Magenta', 'Yellow', 'Black', 'Spot1']
+   * @param {Array<string>} channelNames - 通道名称列表，如
+   *   ['Cyan', 'Magenta', 'Yellow', 'Black', 'Spot1']
    * @param {Array<number>} values - 通道值列表，与channelNames对应
    * @returns {ColorValue}
    */
@@ -516,4 +525,4 @@ class ColorValueBuilder {
   }
 }
 
-export { ColorValue, ColorValueBuilder, ColorSpace };
+export { ColorSpace, ColorValue, ColorValueBuilder };

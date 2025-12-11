@@ -19,6 +19,8 @@
  * 注意：这些是标准转换，DeviceN专色的实际转换应使用tint函数
  */
 
+import { warn } from "../shared/util.js";
+
 class ColorConverter {
   /**
    * CMYK转RGB
@@ -34,7 +36,7 @@ class ColorConverter {
       throw new Error("ColorConverter: CMYK must be array of 4 numbers");
     }
 
-    let [c, m, y, k] = cmyk;
+    const [c, m, y, k] = cmyk;
 
     // 方案A: 标准简化公式（当前使用）
     // 优点：简单快速
@@ -183,7 +185,7 @@ class ColorConverter {
 
     // 验证hex格式
     if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
-      console.warn(`ColorConverter: Invalid hex color ${hex}, using black`);
+      warn(`ColorConverter: Invalid hex color ${hex}, using black`);
       return { r: 0, g: 0, b: 0 };
     }
 
@@ -221,7 +223,7 @@ class ColorConverter {
     const dg = c1.g - c2.g;
     const db = c1.b - c2.b;
 
-    return Math.sqrt(dr * dr + dg * dg + db * db);
+    return Math.hypot(dr, dg, db);
   }
 
   /**

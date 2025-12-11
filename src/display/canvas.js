@@ -41,9 +41,10 @@ import {
   PathType,
   TilingPattern,
 } from "./pattern_helper.js";
-import { convertBlackAndWhiteToRGBA } from "../shared/image_utils.js";
-import { ColorValue } from "../core/color_value.js";
+import { ColorValue, ColorValueBuilder } from "../core/color_value.js";
 import { BlendModeFactory } from "../core/blend_modes.js";
+import { ColorConverter } from "../core/color_converter.js";
+import { convertBlackAndWhiteToRGBA } from "../shared/image_utils.js";
 
 // <canvas> contexts store most of the state we need natively.
 // However, PDF needs a bit more state, which we store here.
@@ -1230,12 +1231,11 @@ class CanvasGraphics {
               this.current.strokeColorValue?.colorSpace === "CMYK" ||
               this.current.strokeColorValue?.colorSpace === "DEVICEN";
 
-            // 特别处理：darken和multiply用于叠印(Overprint)模拟，不应禁用
-            // 在evaluator.js中，当检测到OP/op属性时，会强制设置BM为darken
-            // 这是模拟叠印效果的标准做法
-            const isOverprintMode = value === "darken" || value === "multiply";
+            // lighten和darken都应该在CMYK空间进行混合
+            // fill/stroke方法会检测到这些模式并使用CMYK混合
+            const isCMYKBlendMode = value === "lighten" || value === "darken";
 
-            if (hasCMYKColor && value !== "source-over" && !isOverprintMode) {
+            if (hasCMYKColor && value !== "source-over" && !isCMYKBlendMode) {
               // 其他CMYK混合模式暂不支持，降级为Normal
               warn(
                 `PDF.js: CMYK/DeviceN blend mode "${value}" is not yet supported. ` +
@@ -1246,6 +1246,7 @@ class CanvasGraphics {
               this.current.fillCompositeOperation = "source-over";
               this.current.strokeCompositeOperation = "source-over";
             } else {
+              // 保留混合模式（包括lighten和darken，让fill/stroke方法处理CMYK混合）
               this.ctx.globalCompositeOperation = value;
               // Also set both fill and stroke composite operations to maintain
               // backward compatibility
@@ -1568,9 +1569,438 @@ class CanvasGraphics {
     this.ctx.closePath();
   }
 
+  /**
+   * 检测是否需要CMYK混合
+   * @param {ColorValue|null} colorValue - 颜色值对象
+   * @param {string} blendMode - 混合模式名称
+   * @param {boolean} isOverprintPreview - 是否为叠印预览模式
+   * @returns {boolean}
+   */
+  #needsCMYKBlending(colorValue, blendMode, isOverprintPreview = false) {
+    if (!colorValue) {
+      return false;
+    }
+    const isCMYK =
+      colorValue.colorSpace === "CMYK" || colorValue.colorSpace === "DEVICEN";
+
+    const isCMYKBlendMode = blendMode === "lighten" || blendMode === "darken";
+
+    if (!isCMYK || !isCMYKBlendMode) {
+      return false;
+    }
+
+    // 非叠印预览：lighten和darken应该忽略（改为normal），不使用CMYK混合
+    // 叠印预览：lighten和darken在CMYK空间进行混合
+    const result = isOverprintPreview;
+    return result;
+  }
+
+  /**
+   * 从ImageData提取RGB hex值
+   * @param {ImageData} imageData - 图像数据
+   * @param {number} offset - 像素偏移（RGBA格式，每像素4字节）
+   * @returns {string} RGB hex值，如 "#RRGGBB"
+   */
+  #getRgbFromImageData(imageData, offset) {
+    const r = imageData.data[offset];
+    const g = imageData.data[offset + 1];
+    const b = imageData.data[offset + 2];
+    return `#${r.toString(16).padStart(2, "0")}${g
+      .toString(16)
+      .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  }
+
+  /**
+   * 设置ImageData的RGB值
+   * @param {ImageData} imageData - 图像数据
+   * @param {number} offset - 像素偏移
+   * @param {string} rgbHex - RGB hex值，如 "#RRGGBB"
+   */
+  #setRgbToImageData(imageData, offset, rgbHex) {
+    // 移除#前缀
+    const hex = rgbHex.replace(/^#/, "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    imageData.data[offset] = r;
+    imageData.data[offset + 1] = g;
+    imageData.data[offset + 2] = b;
+    // alpha保持不变
+  }
+
+  /**
+   * 像素级CMYK混合核心方法
+   * @param {ImageData} backdropData - 背景图像数据
+   * @param {ImageData} sourceData - 源图像数据（RGB格式，从临时canvas获取）
+   * @param {string} blendMode - 混合模式名称（如 "lighten", "darken"）
+   * @param {number} alpha - 透明度 [0-1]
+   * @param {ColorValue|null} sourceColorValue - 源颜色的CMYK值（如果可用，避免RGB→CMYK转换误差）
+   * @returns {ImageData} 混合后的图像数据
+   */
+  #blendCMYKPixels(
+    backdropData,
+    sourceData,
+    blendMode,
+    alpha,
+    sourceColorValue = null
+  ) {
+    const result = new ImageData(backdropData.width, backdropData.height);
+    // 将Canvas混合模式名称转换为PDF混合模式名称
+    // lighten -> Lighten, darken -> Darken
+    let pdfBlendMode;
+    if (blendMode === "lighten") {
+      pdfBlendMode = "Lighten";
+    } else if (blendMode === "darken") {
+      pdfBlendMode = "Darken";
+    } else {
+      pdfBlendMode = "Normal";
+    }
+    const blendModeInstance = BlendModeFactory.create(pdfBlendMode, "CMYK");
+
+    // 如果提供了源颜色的CMYK值，直接使用，避免RGB→CMYK转换误差
+    const srcCmyk = sourceColorValue ? sourceColorValue.getCMYK() : null;
+
+    for (let i = 0; i < backdropData.data.length; i += 4) {
+      // 获取源像素的alpha值
+      const sourceAlpha = sourceData.data[i + 3] / 255;
+      // 如果源像素完全透明，直接使用背景
+      if (sourceAlpha === 0) {
+        result.data[i] = backdropData.data[i];
+        result.data[i + 1] = backdropData.data[i + 1];
+        result.data[i + 2] = backdropData.data[i + 2];
+        result.data[i + 3] = backdropData.data[i + 3];
+        continue;
+      }
+
+      // RGB转CMYK（背景）
+      const backRgb = this.#getRgbFromImageData(backdropData, i);
+      const backCmyk = ColorConverter.rgbToCmyk(backRgb);
+
+      // 源颜色CMYK：优先使用提供的值，避免RGB→CMYK转换误差
+      let srcCmykValue;
+      if (srcCmyk) {
+        // 如果提供了CMYK值，直接使用（无论透明度如何）
+        // 这样可以保持CMYK颜色的准确性
+        srcCmykValue = srcCmyk;
+      } else {
+        // 否则从RGB转换（这种情况不应该发生，因为调用时应该总是提供colorValue）
+        const srcRgb = this.#getRgbFromImageData(sourceData, i);
+        srcCmykValue = ColorConverter.rgbToCmyk(srcRgb);
+      }
+
+      // CMYK混合
+      const backColorValue = ColorValueBuilder.createCMYK(backCmyk);
+      const srcColorValue = ColorValueBuilder.createCMYK(srcCmykValue);
+      // 组合alpha：globalAlpha * sourceAlpha
+      const combinedAlpha = alpha * sourceAlpha;
+      const blended = blendModeInstance.blend(
+        backColorValue,
+        srcColorValue,
+        combinedAlpha
+      );
+
+      // CMYK转RGB
+      const resultRgb = blended.toRGB();
+      this.#setRgbToImageData(result, i, resultRgb);
+
+      // 处理alpha通道：背景alpha * (1 - combinedAlpha) + 源alpha * combinedAlpha
+      const backAlpha = backdropData.data[i + 3] / 255;
+      const finalAlpha = Math.min(
+        255,
+        Math.round(
+          (backAlpha * (1 - combinedAlpha) + sourceAlpha * combinedAlpha) * 255
+        )
+      );
+      result.data[i + 3] = finalAlpha;
+    }
+
+    return result;
+  }
+
+  /**
+   * 获取路径的边界框（考虑裁剪和变换）
+   * @param {Path2D} path - 路径对象
+   * @param {string} pathType - 路径类型，PathType.FILL 或 PathType.STROKE
+   * @returns {{x: number, y: number, width: number, height: number}|null}
+   */
+  #getPathBoundingBox(path, pathType = PathType.FILL) {
+    try {
+      // 使用getClippedPathBoundingBox获取裁剪后的边界框
+      // 返回格式：[minX, minY, maxX, maxY]
+      const transform =
+        pathType === PathType.STROKE ? getCurrentTransform(this.ctx) : null;
+      const bbox = this.current.getClippedPathBoundingBox(pathType, transform);
+      if (!bbox || bbox.length !== 4) {
+        return null;
+      }
+
+      const [minX, minY, maxX, maxY] = bbox;
+      const width = maxX - minX;
+      const height = maxY - minY;
+
+      // 确保边界框有效
+      if (
+        width <= 0 ||
+        height <= 0 ||
+        !isFinite(minX) ||
+        !isFinite(minY) ||
+        !isFinite(width) ||
+        !isFinite(height)
+      ) {
+        return null;
+      }
+
+      // 转换为整数像素坐标
+      return {
+        x: Math.floor(minX),
+        y: Math.floor(minY),
+        width: Math.ceil(width),
+        height: Math.ceil(height),
+      };
+    } catch (e) {
+      warn(`Failed to get path bounding box: ${e}`);
+      return null;
+    }
+  }
+
+  /**
+   * 使用CMYK混合模式填充路径
+   * @param {number} opIdx - 操作索引
+   * @param {Path2D} path - 路径对象
+   * @param {ColorValue} colorValue - CMYK颜色值
+   * @param {string} blendMode - 混合模式名称
+   * @param {number} alpha - 透明度
+   */
+  #fillWithCMYKBlending(opIdx, path, colorValue, blendMode, alpha) {
+    // 1. 获取路径边界框
+    const bbox = this.#getPathBoundingBox(path);
+    if (!bbox) {
+      // 如果无法获取边界框，回退到正常填充
+      warn("Cannot get path bounding box, falling back to normal fill");
+      this.ctx.fill(path);
+      return;
+    }
+
+    // 确保边界框在画布范围内
+    const canvasWidth = this.ctx.canvas.width;
+    const canvasHeight = this.ctx.canvas.height;
+    const x = Math.max(0, Math.min(bbox.x, canvasWidth));
+    const y = Math.max(0, Math.min(bbox.y, canvasHeight));
+    const width = Math.min(bbox.width, canvasWidth - x);
+    const height = Math.min(bbox.height, canvasHeight - y);
+
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+
+    try {
+      // 2. 创建临时canvas绘制新填充
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      // 获取当前canvas的变换矩阵
+      const transform = this.ctx.getTransform();
+
+      // 方法：在主canvas上绘制到离屏区域，然后复制
+      // 创建一个离屏canvas来绘制路径（使用主canvas的完整尺寸）
+      const offscreenCanvas = document.createElement("canvas");
+      offscreenCanvas.width = this.ctx.canvas.width;
+      offscreenCanvas.height = this.ctx.canvas.height;
+      const offscreenCtx = offscreenCanvas.getContext("2d");
+
+      // 复制当前canvas的变换矩阵到离屏canvas
+      offscreenCtx.setTransform(
+        transform.a,
+        transform.b,
+        transform.c,
+        transform.d,
+        transform.e,
+        transform.f
+      );
+
+      // 设置填充颜色和样式
+      const rgbColor = colorValue.toRGB();
+
+      offscreenCtx.fillStyle = rgbColor;
+      offscreenCtx.globalAlpha = alpha;
+
+      // 在离屏canvas上绘制路径
+      offscreenCtx.fill(path);
+
+      // 从离屏canvas复制区域到临时canvas（使用单位矩阵）
+      tempCtx.setTransform(1, 0, 0, 1, 0, 0);
+      tempCtx.drawImage(
+        offscreenCanvas,
+        x,
+        y,
+        width,
+        height,
+        0,
+        0,
+        width,
+        height
+      );
+
+      // 3. 获取当前canvas的背景像素
+      const backdropData = this.ctx.getImageData(x, y, width, height);
+      const sourceData = tempCtx.getImageData(0, 0, width, height);
+
+      // 4. CMYK混合（传递源颜色的CMYK值，避免RGB→CMYK转换误差）
+      const blendedData = this.#blendCMYKPixels(
+        backdropData,
+        sourceData,
+        blendMode,
+        alpha,
+        colorValue
+      );
+
+      // 5. 写回结果
+      this.ctx.putImageData(blendedData, x, y);
+    } catch (e) {
+      warn(`CMYK blending failed: ${e}, falling back to normal fill`);
+      // 回退到正常填充
+      this.ctx.fill(path);
+    }
+  }
+
+  /**
+   * 使用CMYK混合模式描边路径
+   * @param {number} opIdx - 操作索引
+   * @param {Path2D} path - 路径对象
+   * @param {ColorValue} colorValue - CMYK颜色值
+   * @param {string} blendMode - 混合模式名称
+   * @param {number} alpha - 透明度
+   */
+  #strokeWithCMYKBlending(opIdx, path, colorValue, blendMode, alpha) {
+    // stroke的边界框计算需要考虑线宽
+    const bbox = this.#getPathBoundingBox(path, PathType.STROKE);
+    if (!bbox) {
+      warn("Cannot get stroke bounding box, falling back to normal stroke");
+      this.ctx.stroke(path);
+      return;
+    }
+
+    // 考虑线宽
+    const lineWidth = this.ctx.lineWidth;
+    const x = Math.max(0, bbox.x - lineWidth);
+    const y = Math.max(0, bbox.y - lineWidth);
+    const width = Math.min(
+      bbox.width + lineWidth * 2,
+      this.ctx.canvas.width - x
+    );
+    const height = Math.min(
+      bbox.height + lineWidth * 2,
+      this.ctx.canvas.height - y
+    );
+
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+
+    try {
+      // 创建临时canvas绘制新描边
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      // 获取当前canvas的变换矩阵
+      const transform = this.ctx.getTransform();
+
+      // 重置临时canvas的变换矩阵（使用单位矩阵）
+      tempCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // 应用当前canvas的变换矩阵
+      tempCtx.setTransform(
+        transform.a,
+        transform.b,
+        transform.c,
+        transform.d,
+        transform.e,
+        transform.f
+      );
+
+      // 复制当前上下文状态（但不包括变换矩阵）
+      tempCtx.lineWidth = this.ctx.lineWidth;
+      tempCtx.lineCap = this.ctx.lineCap;
+      tempCtx.lineJoin = this.ctx.lineJoin;
+      tempCtx.miterLimit = this.ctx.miterLimit;
+      tempCtx.setLineDash(this.ctx.getLineDash());
+      tempCtx.lineDashOffset = this.ctx.lineDashOffset;
+
+      // 调整路径位置（相对于边界框）
+      tempCtx.translate(-x, -y);
+
+      // 设置描边颜色和样式
+      tempCtx.strokeStyle = colorValue.toRGB();
+      tempCtx.globalAlpha = alpha;
+      tempCtx.stroke(path);
+
+      // 获取背景和源像素
+      const backdropData = this.ctx.getImageData(x, y, width, height);
+      const sourceData = tempCtx.getImageData(0, 0, width, height);
+
+      // CMYK混合（传递源颜色的CMYK值，避免RGB→CMYK转换误差）
+      const blendedData = this.#blendCMYKPixels(
+        backdropData,
+        sourceData,
+        blendMode,
+        alpha,
+        colorValue
+      );
+
+      // 写回结果
+      this.ctx.putImageData(blendedData, x, y);
+    } catch (e) {
+      warn(`CMYK stroke blending failed: ${e}, falling back to normal stroke`);
+      this.ctx.stroke(path);
+    }
+  }
+
   stroke(opIdx, path, consumePath = true) {
     const ctx = this.ctx;
     const strokeColor = this.current.strokeColor;
+    const strokeColorValue = this.current.strokeColorValue;
+
+    // 检测是否需要CMYK混合
+    // 优先使用strokeCompositeOperation（如果设置了），否则使用globalCompositeOperation
+    const blendMode =
+      this.current.strokeCompositeOperation || ctx.globalCompositeOperation;
+
+    // 非叠印预览：lighten和darken应该忽略（改为normal）
+    // 叠印预览：lighten和darken在CMYK空间进行混合
+    if (
+      this.#needsCMYKBlending(
+        strokeColorValue,
+        blendMode,
+        this.overprintOption
+      ) &&
+      !(typeof strokeColor === "object" && strokeColor?.getPattern)
+    ) {
+      // 使用CMYK混合（排除pattern stroke）
+      const alpha = this.current.strokeAlpha;
+      this.#strokeWithCMYKBlending(
+        opIdx,
+        path,
+        strokeColorValue,
+        blendMode,
+        alpha
+      );
+      if (consumePath) {
+        this.consumePath(
+          opIdx,
+          path,
+          this.current.getClippedPathBoundingBox(
+            PathType.STROKE,
+            getCurrentTransform(this.ctx)
+          )
+        );
+      }
+      return;
+    }
+
     // For stroke we want to temporarily change the global alpha to the
     // stroking alpha and the composite operation to the stroke composite
     // operation.
@@ -1578,6 +2008,19 @@ class CanvasGraphics {
     const originalCompositeOperation = ctx.globalCompositeOperation;
     if (this.overprintOption) {
       ctx.globalCompositeOperation = this.current.strokeCompositeOperation;
+    } else {
+      // 非叠印预览：如果blendMode是lighten或darken，改为normal
+      const isCMYKBlendMode = blendMode === "lighten" || blendMode === "darken";
+      if (
+        strokeColorValue &&
+        (strokeColorValue.colorSpace === "CMYK" ||
+          strokeColorValue.colorSpace === "DEVICEN") &&
+        isCMYKBlendMode
+      ) {
+        ctx.globalCompositeOperation = "source-over";
+      } else {
+        ctx.globalCompositeOperation = blendMode;
+      }
     }
 
     if (this.contentVisible) {
@@ -1636,14 +2079,59 @@ class CanvasGraphics {
   fill(opIdx, path, consumePath = true) {
     const ctx = this.ctx;
     const fillColor = this.current.fillColor;
+    const fillColorValue = this.current.fillColorValue;
     const isPatternFill = this.current.patternFill;
     let needRestore = false;
+
+    // 调试：检查fillColorValue是否在fill调用时丢失
+    if (!fillColorValue && this.current.fillCompositeOperation === "lighten") {
+      // fillColorValue is null for lighten mode
+    }
+
+    // 检测是否需要CMYK混合
+    // 优先使用fillCompositeOperation（如果设置了），否则使用globalCompositeOperation
+    const blendMode =
+      this.current.fillCompositeOperation || ctx.globalCompositeOperation;
+
+    // 非叠印预览：lighten和darken应该忽略（改为normal）
+    // 叠印预览：lighten和darken在CMYK空间进行混合
+
+    if (
+      this.#needsCMYKBlending(
+        fillColorValue,
+        blendMode,
+        this.overprintOption
+      ) &&
+      !isPatternFill
+    ) {
+      // 使用CMYK混合
+      const alpha = ctx.globalAlpha;
+      this.#fillWithCMYKBlending(opIdx, path, fillColorValue, blendMode, alpha);
+      if (consumePath) {
+        const intersect = this.current.getClippedPathBoundingBox();
+        this.consumePath(opIdx, path, intersect);
+      }
+      return;
+    }
 
     // For fill operations, temporarily set the composite operation to the
     // fill composite operation
     const originalCompositeOperation = ctx.globalCompositeOperation;
     if (this.overprintOption) {
       ctx.globalCompositeOperation = this.current.fillCompositeOperation;
+    } else {
+      // 非叠印预览：如果blendMode是lighten或darken，改为normal
+      const isCMYKBlendMode = blendMode === "lighten" || blendMode === "darken";
+      if (
+        fillColorValue &&
+        (fillColorValue.colorSpace === "CMYK" ||
+          fillColorValue.colorSpace === "DEVICEN") &&
+        isCMYKBlendMode
+      ) {
+        ctx.globalCompositeOperation = "source-over";
+      } else {
+        ctx.globalCompositeOperation = blendMode;
+      }
     }
 
     if (isPatternFill) {
@@ -2488,13 +2976,10 @@ class CanvasGraphics {
     // 检测是否为ColorValue对象（可能经过序列化，失去了原型）
     if (color && typeof color === "object" && color.colorSpace) {
       // ColorValue从worker传递过来后失去了方法，需要重建
-      let colorValue;
-      if (typeof color.toRGB === "function") {
-        colorValue = color; // 已经是ColorValue实例
-      } else {
-        // 反序列化ColorValue
-        colorValue = ColorValue.deserialize(color);
-      }
+      const colorValue =
+        typeof color.toRGB === "function"
+          ? color // 已经是ColorValue实例
+          : ColorValue.deserialize(color); // 反序列化ColorValue
 
       // 存储ColorValue以供后续混合使用
       this.current.strokeColorValue = colorValue;
@@ -2518,50 +3003,41 @@ class CanvasGraphics {
   setFillRGBColor(opIdx, color) {
     this.dependencyTracker?.recordSimpleData("fillColor", opIdx);
 
-    // 调试：记录接收到的颜色
-    if (color && typeof color === "object" && color.colorSpace) {
-      console.log("[DEBUG canvas.js] setFillRGBColor received ColorValue:", {
-        colorSpace: color.colorSpace,
-        channels: color.channels,
-        rgbFallback: color.rgbFallback,
-      });
-    } else {
-      console.log(
-        "[DEBUG canvas.js] setFillRGBColor received:",
-        typeof color,
-        color
-      );
-    }
-
     // 新逻辑：处理ColorValue对象
     // 检测是否为ColorValue对象（可能经过序列化，失去了原型）
     if (color && typeof color === "object" && color.colorSpace) {
-      console.log(
-        "[DEBUG canvas.js] Detected ColorValue object:",
-        color.colorSpace
-      );
       // ColorValue从worker传递过来后失去了方法，需要重建
-      let colorValue;
-      if (typeof color.toRGB === "function") {
-        colorValue = color; // 已经是ColorValue实例
-        console.log("[DEBUG canvas.js] ColorValue already has toRGB method");
-      } else {
-        // 反序列化ColorValue
-        console.log("[DEBUG canvas.js] Deserializing ColorValue");
-        colorValue = ColorValue.deserialize(color);
-      }
+      const colorValue =
+        typeof color.toRGB === "function"
+          ? color // 已经是ColorValue实例
+          : ColorValue.deserialize(color); // 反序列化ColorValue
 
       // 存储ColorValue以供后续混合使用
       this.current.fillColorValue = colorValue;
       // 转换为RGB用于Canvas渲染
       const rgbColor = colorValue.toRGB();
-      console.log(`[DEBUG canvas.js] ColorValue converted to RGB: ${rgbColor}`);
       this.ctx.fillStyle = this.current.fillColor = rgbColor;
     } else {
       // 向后兼容：直接使用RGB字符串
-      console.log("[DEBUG canvas.js] Using old RGB logic, color:", color);
-      this.current.fillColorValue = null;
-      this.ctx.fillStyle = this.current.fillColor = color;
+      // 重要：如果当前混合模式是lighten/darken，且之前有CMYK ColorValue，保留它
+      const blendMode =
+        this.current.fillCompositeOperation ||
+        this.ctx.globalCompositeOperation;
+      const isCMYKBlendMode = blendMode === "lighten" || blendMode === "darken";
+      const hasPreviousCMYKValue =
+        this.current.fillColorValue &&
+        (this.current.fillColorValue.colorSpace === "CMYK" ||
+          this.current.fillColorValue.colorSpace === "DEVICEN");
+
+      if (isCMYKBlendMode && hasPreviousCMYKValue && this.overprintOption) {
+        // 保留之前的CMYK ColorValue，只更新RGB显示值
+        this.ctx.fillStyle = this.current.fillColor = color;
+        // fillColorValue保持不变
+      } else {
+        // 正常情况：清空ColorValue
+        this.current.fillColorValue = null;
+        this.ctx.fillStyle = this.current.fillColor = color;
+      }
     }
 
     this.current.patternFill = false;

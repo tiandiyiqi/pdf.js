@@ -498,4 +498,4 @@ class DeviceNColorSpace {
   }
 }
 
-export { DeviceNManager, DeviceNColorSpace, ChannelManager, PreviewLayer };
+export { ChannelManager, DeviceNColorSpace, DeviceNManager, PreviewLayer };

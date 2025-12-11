@@ -521,7 +521,7 @@ const defaultOptions = {
     value:
       typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
         ? "resource://pdf.js/web/wasm/"
-        : "../web/wasm/",
+        : "../external/qcms/",
     kind: OptionKind.API,
   },
 

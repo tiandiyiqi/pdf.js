@@ -18,9 +18,9 @@
  * 支持RGB、CMYK和DeviceN色彩空间的混合模式
  */
 
-import { ColorValue, ColorValueBuilder, ColorSpace } from "./color_value.js";
-import { ColorConverter } from "./color_converter.js";
+import { ColorSpace, ColorValueBuilder } from "./color_value.js";
 import { ChannelManager } from "./device_n.js";
+import { ColorConverter } from "./color_converter.js";
 import { warn } from "../shared/util.js";
 
 /**
@@ -523,19 +523,18 @@ class BlendModeFactory {
 
 export {
   BlendMode,
-  CMYKBlendMode,
-  DeviceNBlendMode,
-  CanvasBlendMode,
   BlendModeFactory,
-  // 具体混合模式类
-  CMYKNormalMode,
-  CMYKLightenMode,
+  CanvasBlendMode,
+  CMYKBlendMode,
   CMYKDarkenMode,
+  CMYKLightenMode,
   CMYKMultiplyMode,
+  CMYKNormalMode,
   CMYKScreenMode,
-  DeviceNNormalMode,
-  DeviceNLightenMode,
+  DeviceNBlendMode,
   DeviceNDarkenMode,
+  DeviceNLightenMode,
   DeviceNMultiplyMode,
+  DeviceNNormalMode,
   DeviceNScreenMode,
 };

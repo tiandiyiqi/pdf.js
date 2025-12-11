@@ -73,7 +73,7 @@ import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
-import { ColorValue, ColorValueBuilder } from "./color_value.js";
+import { ColorValueBuilder } from "./color_value.js";
 import { getFontSubstitution } from "./font_substitutions.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
@@ -1082,9 +1082,7 @@ class PartialEvaluator {
     let promise = Promise.resolve();
     // Track if we found overprint properties
     let hasOverprint = false;
-    let bmValue = null;
-
-    // First pass: check for overprint properties and save BM value
+    // First pass: check for overprint properties
     for (const [key, value] of gState) {
       switch (key) {
         case "OP":
@@ -1096,7 +1094,7 @@ class PartialEvaluator {
           // OPM is overprint mode, doesn't affect whether overprint is enabled
           break;
         case "BM":
-          bmValue = value;
+          // BM (blend mode) is handled in the second pass
           break;
       }
     }
@@ -2179,7 +2177,7 @@ class PartialEvaluator {
               const colorValue = ColorValueBuilder.createGray(grayValue);
               args = [colorValue];
               fn = OPS.setStrokeRGBColor;
-            } catch (e) {
+            } catch {
               args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
               fn = OPS.setStrokeRGBColor;
             }
