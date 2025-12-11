@@ -1081,7 +1081,6 @@ class PartialEvaluator {
     let promise = Promise.resolve();
     // Track if we found overprint properties
     let hasOverprint = false;
-    let bmValue = null;
 
     // First pass: check for overprint properties and save BM value
     for (const [key, value] of gState) {
@@ -1095,7 +1094,7 @@ class PartialEvaluator {
           // OPM is overprint mode, doesn't affect whether overprint is enabled
           break;
         case "BM":
-          bmValue = value;
+          // Blend mode value, handled elsewhere
           break;
       }
     }
@@ -2384,28 +2383,161 @@ class PartialEvaluator {
       // 收集专色信息
       try {
         const spotColors = new Set();
+        const spotColorsRGB = new Map();
         // 遍历localColorSpaceCache查找专色
-        for (const cs of localColorSpaceCache.getAll()) {
-          if (cs && cs.name === "Alternate" && cs.channelNames) {
+        const allColorSpaces = localColorSpaceCache.getAll();
+        console.log(
+          `[专色调试] localColorSpaceCache.getAll() 返回的颜色空间数量: ${allColorSpaces.length}`
+        );
+        for (const colorSpace of allColorSpaces) {
+          console.log(
+            `[专色调试] 检查颜色空间: name=${colorSpace?.name}, channelNames=${colorSpace?.channelNames}`
+          );
+          if (
+            colorSpace &&
+            colorSpace.name === "Alternate" &&
+            colorSpace.channelNames
+          ) {
             const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
-            for (const channelName of cs.channelNames) {
+
+            // 提取tint函数中的颜色值
+            let spotColorRGB = null;
+            if (
+              colorSpace.tintFn &&
+              colorSpace.tintFn.functionType === "interpolated" &&
+              colorSpace.tintFn.c1
+            ) {
+              // 使用C1值（tint=1时的颜色）作为专色的代表颜色
+              const c1Color = colorSpace.tintFn.c1;
+              console.log(
+                `[专色调试] evaluator中基础颜色空间: ${colorSpace.base?.name}, C1值: ${c1Color}`
+              );
+
+              // 根据基础颜色空间处理C1值
+              if (
+                colorSpace.base?.name === "DeviceCMYK" &&
+                c1Color.length >= 4
+              ) {
+                // 基础颜色空间是CMYK，需要将CMYK转换为RGB
+                const c = c1Color[0];
+                const m = c1Color[1];
+                const y = c1Color[2];
+                const k = c1Color[3];
+                console.log(
+                  `[专色调试] evaluator中CMYK值: ${c}, ${m}, ${y}, ${k}`
+                );
+
+                // 使用与DeviceCmykCS.#toRgb完全相同的多项式回归算法
+                // 系数来自CMYK US Web Coated (SWOP) 色彩空间的采样RGB颜色表
+                let r, g, b;
+
+                // 应用与DeviceCmykCS.#toRgb相同的算法
+                r =
+                  255 +
+                  c *
+                    (-4.387332384609988 * c +
+                      54.48615194189176 * m +
+                      18.82290502165302 * y +
+                      212.25662451639585 * k +
+                      -285.2331026137004) +
+                  m *
+                    (1.7149763477362134 * m -
+                      5.6096736904047315 * y -
+                      17.873870861415444 * k -
+                      5.497006427196366) +
+                  y *
+                    (-2.5217340131683033 * y -
+                      21.248923337353073 * k +
+                      17.5119270841813) +
+                  k * (-21.86122147463605 * k - 189.48180835922747);
+
+                g =
+                  255 +
+                  c *
+                    (8.841041422036149 * c +
+                      60.118027045597366 * m +
+                      6.871425592049007 * y +
+                      31.159100130055922 * k +
+                      -79.2970844816548) +
+                  m *
+                    (-15.310361306967817 * m +
+                      17.575251261109482 * y +
+                      131.35250912493976 * k -
+                      190.9453302588951) +
+                  y *
+                    (4.444339102852739 * y +
+                      9.8632861493405 * k -
+                      24.86741582555878) +
+                  k * (-20.737325471181034 * k - 187.80453709719578);
+
+                b =
+                  255 +
+                  c *
+                    (0.8842522430003296 * c +
+                      8.078677503112928 * m +
+                      30.89978309703729 * y -
+                      0.23883238689178934 * k +
+                      -14.183576799673286) +
+                  m *
+                    (10.49593273432072 * m +
+                      63.02378494754052 * y +
+                      50.606957656360734 * k -
+                      112.23884253719248) +
+                  y *
+                    (0.03296041114873217 * y +
+                      115.60384449646641 * k +
+                      -193.58209356861505) +
+                  k * (-22.33816807309886 * k - 180.12613974708367);
+
+                // 确保RGB值在0-255范围内
+                r = Math.round(Math.max(0, Math.min(255, r)));
+                g = Math.round(Math.max(0, Math.min(255, g)));
+                b = Math.round(Math.max(0, Math.min(255, b)));
+
+                spotColorRGB = {
+                  r,
+                  g,
+                  b,
+                  hex: `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`,
+                };
+                console.log(
+                  `[专色调试] evaluator中CMYK转换为RGB: ${spotColorRGB.hex} (RGB: ${r}, ${g}, ${b})`
+                );
+              } else if (c1Color.length >= 3) {
+                // 假设是RGB值，转换为十六进制颜色码
+                const r = Math.round(c1Color[0] * 255);
+                const g = Math.round(c1Color[1] * 255);
+                const b = Math.round(c1Color[2] * 255);
+                spotColorRGB = {
+                  r,
+                  g,
+                  b,
+                  hex: `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`,
+                };
+                console.log(
+                  `[专色调试] evaluator中直接使用RGB值: ${spotColorRGB.hex} (RGB: ${r}, ${g}, ${b})`
+                );
+              }
+            }
+
+            for (const channelName of colorSpace.channelNames) {
               if (!cmykNames.includes(channelName)) {
                 spotColors.add(channelName);
+                if (spotColorRGB) {
+                  spotColorsRGB.set(channelName, spotColorRGB);
+                }
               }
             }
           }
         }
         // 将专色信息添加到operatorList
         operatorList.spotColors = spotColors;
+        operatorList.spotColorsRGB = spotColorsRGB;
         console.log(
-          `[${new Date().toISOString()}] Evaluator.getOperatorList: 收集到专色:`,
-          Array.from(spotColors)
+          `[专色调试] 收集到的专色信息: spotColors=${Array.from(spotColors)}, spotColorsRGB=${JSON.stringify(Object.fromEntries(spotColorsRGB))}`
         );
       } catch (e) {
-        console.error(
-          `[${new Date().toISOString()}] Evaluator.getOperatorList: 收集专色时出错:`,
-          e
-        );
+        warn(`Evaluator.getOperatorList: 收集专色时出错: ${e}`);
       }
 
       resolve();

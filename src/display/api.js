@@ -1674,6 +1674,7 @@ class PDFPageProxy {
         lastChunk: false,
         separateAnnots: null,
         spotColors: [], // 添加专色字段
+        spotColorsRGB: {}, // 添加专色RGB值字段
       };
 
       this._stats?.time("Page Request");
@@ -1867,6 +1868,21 @@ class PDFPageProxy {
           intentState.operatorList.spotColors.push(spotColor);
         }
       }
+    }
+
+    // 如果chunk包含专色RGB值信息，合并到operatorList中
+    if (
+      operatorListChunk.spotColorsRGB &&
+      typeof operatorListChunk.spotColorsRGB === "object"
+    ) {
+      if (!intentState.operatorList.spotColorsRGB) {
+        intentState.operatorList.spotColorsRGB = {};
+      }
+      // 合并专色RGB值
+      Object.assign(
+        intentState.operatorList.spotColorsRGB,
+        operatorListChunk.spotColorsRGB
+      );
     }
 
     // Notify all the rendering tasks there are more operators to be consumed.

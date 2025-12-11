@@ -286,13 +286,20 @@ class PDFFunction {
     }
     const length = diff.length;
 
-    return function constructInterpolatedFn(src, srcOffset, dest, destOffset) {
+    const constructInterpolatedFn = function(src, srcOffset, dest, destOffset) {
       const x = n === 1 ? src[srcOffset] : src[srcOffset] ** n;
 
       for (let j = 0; j < length; ++j) {
         dest[destOffset + j] = c0[j] + x * diff[j];
       }
     };
+
+    // 在函数对象上存储颜色信息，用于专色颜色提取
+    constructInterpolatedFn.c0 = c0;
+    constructInterpolatedFn.c1 = c1;
+    constructInterpolatedFn.functionType = 'interpolated';
+
+    return constructInterpolatedFn;
   }
 
   static constructStiched(factory, dict) {

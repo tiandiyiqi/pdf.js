@@ -125,95 +125,34 @@ class ColorSpaceUtils {
   }
 
   static #parse(cs, options) {
-    console.log(
-      `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 开始解析颜色空间，cs:`,
-      cs
-    );
     const { xref, resources, pdfFunctionFactory, globalColorSpaceCache } =
       options;
 
     cs = xref.fetchIfRef(cs);
     if (cs instanceof Name) {
-      console.log(
-        `[${new Date().toISOString()}] ColorSpaceUtils.#parse: cs是Name类型，名称: ${cs.name}`
-      );
       switch (cs.name) {
         case "G":
         case "DeviceGray":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 返回DeviceGray颜色空间`
-          );
           return this.gray;
         case "RGB":
         case "DeviceRGB":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 返回DeviceRGB颜色空间`
-          );
           return this.rgb;
         case "DeviceRGBA":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 返回DeviceRGBA颜色空间`
-          );
           return this.rgba;
         case "CMYK":
         case "DeviceCMYK":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 返回DeviceCMYK颜色空间`
-          );
           return this.cmyk;
         case "Pattern":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 返回Pattern颜色空间`
-          );
           return new PatternCS(/* baseCS = */ null);
         default:
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 未识别的颜色空间名称: ${cs.name}`
-          );
           if (resources instanceof Dict) {
-            console.log(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 检查资源字典中的颜色空间，resources:`,
-              resources
-            );
             const colorSpaces = resources.get("ColorSpace");
-            console.log(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 资源字典中的ColorSpace:`,
-              colorSpaces
-            );
             if (colorSpaces instanceof Dict) {
-              // Dict对象的map属性是私有的，使用_map访问
-              try {
-                const keys = colorSpaces._map
-                  ? Array.from(colorSpaces._map.keys())
-                  : [];
-                console.log(
-                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ColorSpace字典中的键:`,
-                  keys
-                );
-              } catch (e) {
-                console.log(
-                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 无法获取ColorSpace字典键，错误:`,
-                  e
-                );
-              }
-
               const resourcesCS = colorSpaces.get(cs.name);
-              console.log(
-                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从ColorSpace字典查找 ${cs.name}，结果:`,
-                resourcesCS
-              );
-
               if (resourcesCS) {
                 if (resourcesCS instanceof Name) {
-                  console.log(
-                    `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从资源中获取颜色空间: ${resourcesCS.name}`
-                  );
                   return this.#parse(resourcesCS, options);
                 }
-                console.log(
-                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从资源中获取颜色空间，开始递归解析，cs:`,
-                  resourcesCS
-                );
                 cs = resourcesCS;
                 break;
               }
@@ -225,14 +164,7 @@ class ColorSpaceUtils {
       }
     }
     if (Array.isArray(cs)) {
-      console.log(
-        `[${new Date().toISOString()}] ColorSpaceUtils.#parse: cs是数组类型，数组内容:`,
-        cs
-      );
       const mode = xref.fetchIfRef(cs[0]).name;
-      console.log(
-        `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 数组模式: ${mode}`
-      );
       let params, numComps, baseCS, whitePoint, blackPoint, gamma;
 
       switch (mode) {
@@ -323,86 +255,39 @@ class ColorSpaceUtils {
         case "Separation":
         case "DeviceN":
         case "NChannel":
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 开始处理${mode}颜色空间，cs:`,
-            cs
-          );
-          // 检查cs数组是否有足够的元素
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: cs数组长度: ${cs.length}`
-          );
-          for (let i = 0; i < cs.length; i++) {
-            console.log(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: cs[${i}]类型: ${typeof cs[i]}，值:`,
-              cs[i]
-            );
-          }
-
           // 提取通道名称
           let channelNames = [];
           try {
             const name = xref.fetchIfRef(cs[1]);
-            console.log(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 提取name，类型: ${typeof name}，值:`,
-              name
-            );
             numComps = Array.isArray(name) ? name.length : 1;
-            console.log(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 计算numComps: ${numComps}`
-            );
 
             if (Array.isArray(name)) {
               // DeviceN/NChannel颜色空间，name是通道名称数组
-              console.log(
-                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ${mode}颜色空间，name是数组:`,
-                name
-              );
               channelNames = name.map(n => {
-                const channelName =
-                  typeof n === "string"
-                    ? n
-                    : n instanceof Name
-                      ? n.name
-                      : String(n);
-                console.log(
-                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 提取通道名称:`,
-                  channelName
-                );
+                let channelName;
+                if (typeof n === "string") {
+                  channelName = n;
+                } else if (n instanceof Name) {
+                  channelName = n.name;
+                } else {
+                  channelName = String(n);
+                }
                 return channelName;
               });
             } else if (typeof name === "string" || name instanceof Name) {
               // Separation颜色空间，name是单个专色名称
               const channelName = typeof name === "string" ? name : name.name;
-              console.log(
-                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ${mode}颜色空间，name是单个专色:`,
-                channelName
-              );
               channelNames = [channelName];
             } else {
-              console.log(
-                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ${mode}颜色空间，name是未知类型:`,
-                typeof name,
-                name
-              );
+              // 处理其他类型的名称
+              channelNames = [];
             }
-          } catch (e) {
-            console.error(
-              `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 处理${mode}颜色空间时发生错误:`,
-              e
-            );
+          } catch {
             channelNames = [];
           }
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 处理${mode}颜色空间，提取到通道名称:`,
-            channelNames
-          );
 
           baseCS = this.#subParse(cs[2], options);
           const tintFn = pdfFunctionFactory.create(cs[3]);
-          console.log(
-            `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 创建AlternateCS实例，参数: numComps=${numComps}，base=${baseCS.name}，channelNames=`,
-            channelNames
-          );
           return new AlternateCS(numComps, baseCS, tintFn, channelNames);
         case "Lab":
           params = xref.fetchIfRef(cs[1]);

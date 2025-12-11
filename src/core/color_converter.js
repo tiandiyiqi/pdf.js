@@ -32,11 +32,6 @@ class ColorConverter {
   // 触发事件
   static #triggerEvent(eventName, data) {
     const listeners = this.#eventListeners.get(eventName) || [];
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter: 触发事件 ${eventName}，数据:`,
-      data,
-      `监听器数量: ${listeners.length}`
-    );
     for (const listener of listeners) {
       listener(data);
     }
@@ -57,14 +52,10 @@ class ColorConverter {
 
   static getColorFilterConfig() {
     const colors = Object.fromEntries(this.#colorFilterConfig.colors);
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter.getColorFilterConfig: 返回颜色配置，enabled: ${this.#colorFilterConfig.enabled}，overprint: ${this.#colorFilterConfig.overprint}，colors:`,
-      colors
-    );
     return {
       enabled: this.#colorFilterConfig.enabled,
       overprint: this.#colorFilterConfig.overprint,
-      colors: colors,
+      colors,
     };
   }
 
@@ -74,38 +65,19 @@ class ColorConverter {
     }
   }
 
-  static addSpotColor(spotName, visible = true) {
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter.addSpotColor: 开始添加专色，spotName: ${spotName}，类型: ${typeof spotName}，visible: ${visible}`
-    );
+  static addSpotColor(spotName, visible = true, color = null) {
     if (typeof spotName === "string") {
       const wasPresent = this.#colorFilterConfig.colors.has(spotName);
       this.#colorFilterConfig.colors.set(spotName, !!visible);
 
       if (!wasPresent) {
-        console.log(
-          `[${new Date().toISOString()}] ColorConverter.addSpotColor: 专色 ${spotName} 首次添加，触发事件`
-        );
-        // 触发专色添加事件
+        // 触发专色添加事件，包含颜色信息
         this.#triggerEvent("spotColorAdded", {
           name: spotName,
           visible: !!visible,
+          color,
         });
-      } else {
-        console.log(
-          `[${new Date().toISOString()}] ColorConverter.addSpotColor: 专色 ${spotName} 已存在，跳过事件触发`
-        );
       }
-      const currentColors = Object.fromEntries(this.#colorFilterConfig.colors);
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter.addSpotColor: 添加专色后，当前颜色配置:`,
-        currentColors
-      );
-    } else {
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter.addSpotColor: 无效的专色名称，类型: ${typeof spotName}，值:`,
-        spotName
-      );
     }
   }
 
@@ -115,14 +87,7 @@ class ColorConverter {
    * @returns {Promise<string[]>} 专色名称列表
    */
   static async extractSpotColorsFromPDF(pdfDocument) {
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 开始提取专色`
-    );
-
     if (!pdfDocument || !pdfDocument.numPages) {
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 无效的PDF文档`
-      );
       return [];
     }
 
@@ -130,21 +95,11 @@ class ColorConverter {
 
     try {
       // 只扫描第一页（通常足够）
-      const page = await pdfDocument.getPage(1);
-      const opList = await page.getOperatorList();
-
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 获取到第一页的操作列表，操作数: ${opList.fnArray.length}`
-      );
-
       // 注意：这里我们无法直接访问ColorSpace对象，因为那些在Worker线程
       // 但我们可以通过其他方式（如PDF元数据）获取专色信息
       // 暂时返回空数组，让PDF文档加载后通过其他机制填充
-    } catch (error) {
-      console.error(
-        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 提取专色时出错:`,
-        error
-      );
+    } catch {
+      // 错误处理
     }
 
     return Array.from(spotColors);
@@ -178,21 +133,33 @@ class ColorConverter {
 
   // 过滤逻辑
   static filterCMYK(cmyk) {
-    if (!this.#colorFilterConfig.enabled) return [...cmyk];
+    if (!this.#colorFilterConfig.enabled) {
+      return [...cmyk];
+    }
 
     const filtered = [...cmyk];
     const colors = this.#colorFilterConfig.colors;
 
-    if (!colors.get("Cyan")) filtered[0] = 0;
-    if (!colors.get("Magenta")) filtered[1] = 0;
-    if (!colors.get("Yellow")) filtered[2] = 0;
-    if (!colors.get("Black")) filtered[3] = 0;
+    if (!colors.get("Cyan")) {
+      filtered[0] = 0;
+    }
+    if (!colors.get("Magenta")) {
+      filtered[1] = 0;
+    }
+    if (!colors.get("Yellow")) {
+      filtered[2] = 0;
+    }
+    if (!colors.get("Black")) {
+      filtered[3] = 0;
+    }
 
     return filtered;
   }
 
   static filterSpot(spotName, spotValue) {
-    if (!this.#colorFilterConfig.enabled) return spotValue;
+    if (!this.#colorFilterConfig.enabled) {
+      return spotValue;
+    }
 
     const shouldShow = this.#colorFilterConfig.colors.get(spotName);
     return shouldShow === false ? 0 : spotValue;
@@ -204,70 +171,48 @@ class ColorConverter {
   }
 
   static deviceNToRgbWithFilter(channels) {
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter: 进入 deviceNToRgbWithFilter 方法，通道数据:`,
-      channels
-    );
-
     // 先处理专色名称的自动注册
     // 检查channels的不同可能结构
     if (channels.spots) {
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter: 检测到专色通道:`,
-        Object.keys(channels.spots)
-      );
       for (const [name] of Object.entries(channels.spots)) {
         // 如果专色尚未在配置中，自动添加，否则保持现有可见性
         if (!this.#colorFilterConfig.colors.has(name)) {
-          this.addSpotColor(name);
+          // 检查是否有颜色信息
+          const color = channels.spotColorsRGB?.[name]?.hex || null;
+          this.addSpotColor(name, true, color);
         }
       }
     } else if (channels.channelNames) {
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter: 检测到通道名称:`,
-        channels.channelNames
-      );
       // 从通道名称中提取专色
       const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
       const spotNames = channels.channelNames.filter(
         name => !cmykNames.includes(name)
       );
-      console.log(
-        `[${new Date().toISOString()}] ColorConverter: 提取到专色名称:`,
-        spotNames
-      );
-      spotNames.forEach(name => this.addSpotColor(name));
+      spotNames.forEach(name => {
+        // 检查是否有颜色信息
+        const color = channels.spotColorsRGB?.[name]?.hex || null;
+        this.addSpotColor(name, true, color);
+      });
     }
 
     const cmyk = channels.cmyk ? this.filterCMYK(channels.cmyk) : [0, 0, 0, 0];
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter: 处理后的CMYK值:`,
-      cmyk
-    );
 
     let totalSpot = 0;
     if (channels.spots) {
       for (const [name, value] of Object.entries(channels.spots)) {
         const filteredValue = this.filterSpot(name, value);
         totalSpot += filteredValue;
-        console.log(
-          `[${new Date().toISOString()}] ColorConverter: 处理专色 ${name}，原始值: ${value}，过滤后值: ${filteredValue}，累计值: ${totalSpot}`
-        );
       }
     }
 
     cmyk[3] = Math.min(1, cmyk[3] + totalSpot * 0.3);
     const rgb = this.cmykToRgb(cmyk);
-    console.log(
-      `[${new Date().toISOString()}] ColorConverter: 最终CMYK值:`,
-      cmyk,
-      `转换为RGB值:`,
-      rgb
-    );
     return rgb;
   }
 
-  // CMYK到RGB的转换方法（基于现有逻辑）
+  // CMYK到RGB的转换方法
+  // 使用与DeviceCmykCS.#toRgb相同的多项式回归算法
+  // 系数来自CMYK US Web Coated (SWOP) 色彩空间的采样RGB颜色表
   static cmykToRgb(cmyk) {
     const [c, m, y, k] = cmyk;
 
@@ -279,14 +224,35 @@ class ColorConverter {
       const b = 255 * (1 - y * (1 - k) - k * 0.5);
 
       return [Math.round(r), Math.round(g), Math.round(b)];
-    } else {
-      // 普通模式：简单的CMYK到RGB转换公式
-      const r = 255 * (1 - c) * (1 - k);
-      const g = 255 * (1 - m) * (1 - k);
-      const b = 255 * (1 - y) * (1 - k);
-
-      return [Math.round(r), Math.round(g), Math.round(b)];
     }
+    
+    // 普通模式：使用多项式回归算法，与DeviceCmykCS.#toRgb完全相同
+    let r, g, b;
+    
+    r = 255 +
+      c * (-4.387332384609988 * c + 54.48615194189176 * m + 18.82290502165302 * y + 212.25662451639585 * k + -285.2331026137004) +
+      m * (1.7149763477362134 * m - 5.6096736904047315 * y - 17.873870861415444 * k - 5.497006427196366) +
+      y * (-2.5217340131683033 * y - 21.248923337353073 * k + 17.5119270841813) +
+      k * (-21.86122147463605 * k - 189.48180835922747);
+    
+    g = 255 +
+      c * (8.841041422036149 * c + 60.118027045597366 * m + 6.871425592049007 * y + 31.159100130055922 * k + -79.2970844816548) +
+      m * (-15.310361306967817 * m + 17.575251261109482 * y + 131.35250912493976 * k - 190.9453302588951) +
+      y * (4.444339102852739 * y + 9.8632861493405 * k - 24.86741582555878) +
+      k * (-20.737325471181034 * k - 187.80453709719578);
+    
+    b = 255 +
+      c * (0.8842522430003296 * c + 8.078677503112928 * m + 30.89978309703729 * y - 0.23883238689178934 * k + -14.183576799673286) +
+      m * (10.49593273432072 * m + 63.02378494754052 * y + 50.606957656360734 * k - 112.23884253719248) +
+      y * (0.03296041114873217 * y + 115.60384449646641 * k + -193.58209356861505) +
+      k * (-22.33816807309886 * k - 180.12613974708367);
+    
+    // 确保RGB值在0-255范围内
+    r = Math.round(Math.max(0, Math.min(255, r)));
+    g = Math.round(Math.max(0, Math.min(255, g)));
+    b = Math.round(Math.max(0, Math.min(255, b)));
+
+    return [r, g, b];
   }
 }
 

@@ -668,6 +668,7 @@ class OperatorList {
     this.weight = 0;
     this._resolved = streamSink ? null : Promise.resolve();
     this.spotColors = new Set(); // 用于收集专色名称
+    this.spotColorsRGB = new Map(); // 用于收集专色名称到RGB值的映射
   }
 
   static setOptions({ isOffscreenCanvasSupported }) {
@@ -758,6 +759,9 @@ class OperatorList {
       argsArray: this.argsArray,
       length: this.length,
       spotColors: this.spotColors ? Array.from(this.spotColors) : [], // 转换Set为Array以支持序列化
+      spotColorsRGB: this.spotColorsRGB
+        ? Object.fromEntries(this.spotColorsRGB)
+        : {}, // 转换Map为Object以支持序列化
     };
   }
 
@@ -811,10 +815,14 @@ class OperatorList {
       separateAnnots,
       length,
     };
-    
+
     // 在最后一个chunk中包含专色信息
     if (lastChunk && this.spotColors) {
       data.spotColors = Array.from(this.spotColors);
+      // 包含专色RGB值信息
+      if (this.spotColorsRGB && this.spotColorsRGB.size > 0) {
+        data.spotColorsRGB = Object.fromEntries(this.spotColorsRGB);
+      }
     }
 
     this._streamSink.enqueue(data, 1, this._transfers);

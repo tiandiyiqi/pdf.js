@@ -32,11 +32,9 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.inksContainer = null;
     this.eyeIcons = {}; // 保存眼睛图标的引用
     this._firstPageRendered = false; // 标记第一页是否已渲染
+    this.spotColorMap = new Map(); // 存储专色颜色映射，避免每次render重新生成
 
-    // 添加专色事件监听器（虽然worker线程的事件无法传递到主线程，但保留以备将来扩展）
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer.constructor: 添加专色事件监听器`
-    );
+    // 添加专色事件监听器
     this._handleSpotColorAdded = this._handleSpotColorAdded.bind(this);
     ColorConverter.addEventListener(
       "spotColorAdded",
@@ -46,9 +44,6 @@ class PDFInkListViewer extends BaseTreeViewer {
     // 监听页面渲染事件，在第一页渲染完成后更新油墨列表
     this._handlePageRendered = this._handlePageRendered.bind(this);
     this.eventBus._on("pagerendered", this._handlePageRendered);
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer.constructor: 添加页面渲染事件监听器`
-    );
   }
 
   /**
@@ -58,9 +53,6 @@ class PDFInkListViewer extends BaseTreeViewer {
     // 只在第一页渲染完成时更新一次
     if (!this._firstPageRendered && evt.pageNumber === 1) {
       this._firstPageRendered = true;
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 第一页渲染完成，尝试提取专色信息`
-      );
 
       try {
         // 从evt.source获取页面代理对象
@@ -68,9 +60,28 @@ class PDFInkListViewer extends BaseTreeViewer {
         if (pageView && pageView.pdfPage) {
           const opList = await pageView.pdfPage.getOperatorList();
           console.log(
-            `[${new Date().toISOString()}] PDFInkListViewer: 获取到operatorList，spotColors:`,
-            opList.spotColors
+            `[专色调试] 从operatorList获取的专色信息: spotColors=${JSON.stringify(opList.spotColors)}, spotColorsRGB=${JSON.stringify(opList.spotColorsRGB)}`
           );
+
+          // 保存spotColorsRGB到实例中，用于render方法
+          if (opList.spotColorsRGB) {
+            this.spotColorsRGB = opList.spotColorsRGB;
+            console.log(
+              `[专色调试] 保存spotColorsRGB到实例: ${JSON.stringify(this.spotColorsRGB)}`
+            );
+
+            // 更新spotColorMap中的颜色值
+            for (const [spotName, colorInfo] of Object.entries(
+              opList.spotColorsRGB
+            )) {
+              if (colorInfo.hex) {
+                console.log(
+                  `[专色调试] 更新spotColorMap: ${spotName} -> ${colorInfo.hex}`
+                );
+                this.spotColorMap.set(spotName, colorInfo.hex);
+              }
+            }
+          }
 
           // 如果operatorList包含专色信息，将它们添加到主线程的ColorConverter中
           if (
@@ -79,18 +90,20 @@ class PDFInkListViewer extends BaseTreeViewer {
             opList.spotColors.length > 0
           ) {
             for (const spotName of opList.spotColors) {
+              // 使用operatorList中的spotColorsRGB获取颜色值
+              const spotColor =
+                opList.spotColorsRGB && opList.spotColorsRGB[spotName]
+                  ? opList.spotColorsRGB[spotName].hex
+                  : null;
               console.log(
-                `[${new Date().toISOString()}] PDFInkListViewer: 从operatorList添加专色: ${spotName}`
+                `[专色调试] 从operatorList添加专色到ColorConverter: ${spotName}, 颜色: ${spotColor}`
               );
-              ColorConverter.addSpotColor(spotName, true);
+              ColorConverter.addSpotColor(spotName, true, spotColor);
             }
           }
         }
       } catch (error) {
-        console.error(
-          `[${new Date().toISOString()}] PDFInkListViewer: 提取专色信息时出错:`,
-          error
-        );
+        console.error(`PDFInkListViewer: 提取专色信息时出错:`, error);
       }
 
       // 延迟一小段时间后重新render
@@ -107,6 +120,7 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.inksContainer = null;
     this.eyeIcons = {};
     // 注意：不要在这里重置_firstPageRendered，因为reset会在render中被调用
+    // 注意：不要在这里重置spotColorMap，保留专色颜色映射
   }
 
   destroy() {
@@ -133,73 +147,53 @@ class PDFInkListViewer extends BaseTreeViewer {
    * Handle spot color added event
    */
   _handleSpotColorAdded(data) {
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 接收到专色添加事件，数据:`,
-      data
-    );
-    // 添加新的专色到油墨列表
-    this._addSpotColorToInkList(data.name, data.visible);
+    // 添加新的专色到油墨列表，使用实际颜色值
+    this._addSpotColorToInkList(data.name, data.visible, data.color);
   }
 
   /**
    * Add a spot color to the ink list
    */
-  _addSpotColorToInkList(name, visible) {
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 尝试添加专色到油墨列表，名称: ${name}，可见性: ${visible}`
-    );
-
+  _addSpotColorToInkList(name, visible, color) {
     // 检查是否已经存在
     if (this.inks.some(ink => ink.name === name)) {
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 专色 ${name} 已存在于油墨列表中，跳过`
-      );
       return;
     }
 
-    // 生成随机颜色
-    const randomColor = this._generateRandomColor();
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 为专色 ${name} 生成随机颜色: ${randomColor}`
-    );
+    // 检查是否已经为该专色生成过颜色，优先级：
+    // 1. spotColorMap中已存在的颜色
+    // 2. 外部提供的color参数
+    // 3. 生成新的随机颜色
+    let inkColor;
+    if (this.spotColorMap.has(name)) {
+      inkColor = this.spotColorMap.get(name);
+    } else if (color) {
+      inkColor = color;
+      this.spotColorMap.set(name, color);
+    } else {
+      inkColor = this._generateRandomColor();
+      this.spotColorMap.set(name, inkColor);
+    }
 
     // 创建新的油墨项
     const newInk = {
       id: this.nextId++,
       name: name,
-      color: randomColor,
+      color: inkColor,
       visible: visible,
       isGroup: false,
     };
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 创建新的油墨项:`,
-      newInk
-    );
 
     // 添加到油墨列表
     this.inks.push(newInk);
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 油墨列表更新后:`,
-      this.inks
-    );
 
     // 如果油墨容器已经创建，直接添加到DOM
     if (this.inksContainer) {
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 油墨容器已存在，创建并添加DOM元素`
-      );
       const inkElement = this._createInkElement(newInk);
       this.inksContainer.appendChild(inkElement);
 
       // 更新事件
       this._dispatchEvent(this.inks.length);
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 触发油墨列表更新事件，当前油墨数量: ${this.inks.length}`
-      );
-    } else {
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 油墨容器尚未创建，等待render()调用`
-      );
     }
   }
 
@@ -361,25 +355,11 @@ class PDFInkListViewer extends BaseTreeViewer {
    * Render the ink list with current color configuration
    */
   render() {
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 开始render()方法`
-    );
-
     // Clear previous content
     this.reset();
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 重置后状态，inks:`,
-      this.inks,
-      `inksContainer:`,
-      this.inksContainer
-    );
 
     // 从ColorConverter获取当前的颜色配置
     const colorConfig = ColorConverter.getColorFilterConfig();
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 获取颜色配置:`,
-      colorConfig
-    );
 
     // 初始化inks数组
     const inks = [];
@@ -442,22 +422,50 @@ class PDFInkListViewer extends BaseTreeViewer {
         continue; // 跳过CMYK通道，已经添加过了
       }
 
-      // 为专色生成随机颜色
-      const randomColor = this._generateRandomColor();
+      console.log(`[专色调试] 处理专色: ${colorName}, 可见: ${visible}`);
+      console.log(
+        `[专色调试] 当前spotColorsRGB: ${JSON.stringify(this.spotColorsRGB)}`
+      );
+      console.log(
+        `[专色调试] 当前spotColorMap: ${JSON.stringify(Object.fromEntries(this.spotColorMap))}`
+      );
+
+      // 检查是否已经为该专色生成过颜色，优先级：
+      // 1. spotColorsRGB中的颜色值（最新获取的）
+      // 2. spotColorMap中已存在的颜色
+      // 3. 生成新的随机颜色
+      let color;
+      if (this.spotColorsRGB && this.spotColorsRGB[colorName]) {
+        // 使用从operatorList获取的spotColorsRGB值
+        color = this.spotColorsRGB[colorName].hex;
+        console.log(
+          `[专色调试] 从spotColorsRGB获取颜色: ${colorName} -> ${color}`
+        );
+        this.spotColorMap.set(colorName, color);
+      } else if (this.spotColorMap.has(colorName)) {
+        color = this.spotColorMap.get(colorName);
+        console.log(
+          `[专色调试] 从spotColorMap获取颜色: ${colorName} -> ${color}`
+        );
+      } else {
+        color = this._generateRandomColor();
+        console.log(`[专色调试] 生成随机颜色: ${colorName} -> ${color}`);
+        this.spotColorMap.set(colorName, color);
+      }
+
       inks.push({
         id: nextId++,
         name: colorName,
-        color: randomColor,
+        color: color,
         visible: visible !== false,
         isGroup: false,
       });
+      console.log(
+        `[专色调试] 添加专色到油墨列表: ${JSON.stringify(inks[inks.length - 1])}`
+      );
     }
 
     this.inks = inks;
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 初始化inks数组:`,
-      this.inks
-    );
 
     // Create fragment for better performance
     const fragment = document.createDocumentFragment();
@@ -465,33 +473,18 @@ class PDFInkListViewer extends BaseTreeViewer {
     // Create inks container
     this.inksContainer = document.createElement("div");
     this.inksContainer.className = "inksContainer";
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 创建油墨容器:`,
-      this.inksContainer
-    );
 
     // Add inks
     for (const ink of this.inks) {
       const inkElement = this._createInkElement(ink);
       this.inksContainer.appendChild(inkElement);
-      console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 添加${ink.isGroup ? "CMYK组" : "油墨项"}到容器:`,
-        ink
-      );
     }
 
     // Append to fragment
     fragment.appendChild(this.inksContainer);
 
     // Update DOM
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: 更新DOM前，当前inks数组:`,
-      this.inks
-    );
     this._finishRendering(fragment, this.inks.length, false);
-    console.log(
-      `[${new Date().toISOString()}] PDFInkListViewer: render()方法完成`
-    );
   }
 }
 

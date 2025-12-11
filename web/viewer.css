@@ -660,6 +660,7 @@ body {
 }
 
 #pageNumber {
+  appearance: textfield;
   -moz-appearance: textfield; /* hides the spinner in moz */
   text-align: end;
   width: 40px;
@@ -1766,10 +1767,7 @@ dialog :link {
   background-color: var(--toggled-hover-active-btn-color);
 }
 
-/* ink list button */
-#sidebarViewButtons .toolbarImage {
-  /* Inherit styles from toolbarButton */
-}
+
 
 /* Ink list styles */
 .inksContainer {

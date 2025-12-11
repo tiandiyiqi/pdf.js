@@ -19,6 +19,7 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/api.js").PDFDocumentLoadingTask} PDFDocumentLoadingTask */
 
+import { AppOptions, OptionKind } from "./app_options.js";
 import {
   animationStarted,
   apiPageLayoutToViewerModes,
@@ -60,44 +61,43 @@ import {
   updateUrlHash,
   version,
 } from "pdfjs-lib";
-import { AppOptions, OptionKind } from "./app_options.js";
+import { CaretBrowsingMode } from "./caret_browsing.js";
+import { CommentManager } from "./comment_manager.js";
+import { EditorUndoBar } from "./editor_undo_bar.js";
 import { EventBus, FirefoxEventBus } from "./event_utils.js";
-import { ExternalServices, initCom, MLManager } from "web-external_services";
+import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
+import { OverlayManager } from "./overlay_manager.js";
+import { PasswordPrompt } from "./password_prompt.js";
+import { PdfTextExtractor } from "./pdf_text_extractor.js";
+import { PDFFindController } from "./pdf_find_controller.js";
+import { PDFHistory } from "./pdf_history.js";
+import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
+import { PDFScriptingManager } from "./pdf_scripting_manager.js";
+import { ViewHistory } from "./view_history.js";
 import {
   ImageAltTextSettings,
   NewAltTextManager,
 } from "web-new_alt_text_manager";
-import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
-import { CaretBrowsingMode } from "./caret_browsing.js";
-import { CommentManager } from "./comment_manager.js";
 import { DownloadManager } from "web-download_manager";
-import { EditorUndoBar } from "./editor_undo_bar.js";
-import { OverlayManager } from "./overlay_manager.js";
-import { PasswordPrompt } from "./password_prompt.js";
+import { ExternalServices, initCom, MLManager } from "web-external_services";
 import { PDFAttachmentViewer } from "web-pdf_attachment_viewer";
 import { PDFCursorTools } from "web-pdf_cursor_tools";
 import { PDFDocumentProperties } from "web-pdf_document_properties";
 import { PDFFindBar } from "web-pdf_find_bar";
-import { PDFFindController } from "./pdf_find_controller.js";
-import { PDFHistory } from "./pdf_history.js";
+import { PDFInkListViewer } from "web-pdf_ink_list_viewer";
 import { PDFLayerViewer } from "web-pdf_layer_viewer";
 import { PDFOutlineViewer } from "web-pdf_outline_viewer";
 import { PDFPresentationMode } from "web-pdf_presentation_mode";
 import { PDFPrintServiceFactory } from "web-print_service";
-import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
-import { PDFScriptingManager } from "./pdf_scripting_manager.js";
+import { Preferences } from "web-preferences";
 import { PDFSidebar } from "web-pdf_sidebar";
-import { PdfTextExtractor } from "./pdf_text_extractor.js";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
 import { PDFViewer } from "./pdf_viewer.js";
-import { PDFInkListViewer } from "web-pdf_ink_list_viewer";
-import { Preferences } from "web-preferences";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { SignatureManager } from "web-signature_manager";
 import { Toolbar } from "web-toolbar";
-import { ViewHistory } from "./view_history.js";
 
 const FORCE_PAGES_LOADED_TIMEOUT = 10000; // ms
 
@@ -211,9 +211,9 @@ const PDFViewerApplication = {
       this.updateOverprintButton(overprintOptionButton, initialValue);
 
       // 初始化ColorConverter的叠印状态
-      if (typeof ColorConverter !== "undefined") {
-        const currentConfig = ColorConverter.getColorFilterConfig();
-        ColorConverter.setColorFilterConfig({
+      if (typeof window !== "undefined" && window.ColorConverter) {
+        const currentConfig = window.ColorConverter.getColorFilterConfig();
+        window.ColorConverter.setColorFilterConfig({
           ...currentConfig,
           overprint: initialValue,
         });
@@ -246,9 +246,9 @@ const PDFViewerApplication = {
   setOverprintOption(enabled) {
     AppOptions.set("overprintOption", enabled);
     // 更新ColorConverter的叠印状态
-    if (typeof ColorConverter !== "undefined") {
-      const currentConfig = ColorConverter.getColorFilterConfig();
-      ColorConverter.setColorFilterConfig({
+    if (typeof window !== "undefined" && window.ColorConverter) {
+      const currentConfig = window.ColorConverter.getColorFilterConfig();
+      window.ColorConverter.setColorFilterConfig({
         ...currentConfig,
         overprint: enabled,
       });
