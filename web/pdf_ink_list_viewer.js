@@ -30,8 +30,12 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.inks = [];
     this.nextId = 6; // 从6开始，避免与demo数据冲突
     this.inksContainer = null;
+    this.eyeIcons = {}; // 保存眼睛图标的引用
 
     // 添加专色事件监听器
+    console.log(
+      `[${new Date().toISOString()}] PDFInkListViewer.constructor: 添加专色事件监听器`
+    );
     this._handleSpotColorAdded = this._handleSpotColorAdded.bind(this);
     ColorConverter.addEventListener(
       "spotColorAdded",
@@ -44,6 +48,7 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.inks = [];
     this.nextId = 6;
     this.inksContainer = null;
+    this.eyeIcons = {};
   }
 
   destroy() {
@@ -172,7 +177,26 @@ class PDFInkListViewer extends BaseTreeViewer {
     // Create color swatch
     const colorSwatch = document.createElement("div");
     colorSwatch.className = "colorSwatch";
-    colorSwatch.style.backgroundColor = ink.color;
+    if (ink.name === "CMYK" && ink.isGroup) {
+      // Use inline CMYK SVG for reliable display
+      colorSwatch.style.backgroundColor = "transparent";
+      colorSwatch.innerHTML = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5.7 5.7" width="100%" height="100%">
+        <style type="text/css">
+          .st0{fill:#00A0E9;}
+          .st1{fill:#FFF100;}
+          .st2{fill:#E4007F;}
+          .st3{fill:#231815;}
+        </style>
+        <polygon points="2.8,2.8 0,5.7 5.7,5.7" fill="#231815"/>
+        <polygon class="st0" points="2.8,2.8 0,0 5.7,0"/>
+        <polygon class="st1" points="2.8,2.8 5.7,5.7 5.7,0"/>
+        <polygon class="st2" points="2.8,2.8 0,5.7 0,0"/>
+      </svg>`;
+    } else {
+      // Use regular color for channels
+      colorSwatch.style.backgroundColor = ink.color;
+      colorSwatch.innerHTML = "";
+    }
 
     // Create color name
     const colorName = document.createElement("div");
@@ -181,15 +205,54 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     // Bind click event to eye icon
     eyeIcon.addEventListener("click", () => {
-      ink.visible = !ink.visible;
-      if (ink.visible) {
-        eyeIcon.classList.remove("eyeHidden");
-        eyeIcon.classList.add("eyeVisible");
-        ColorConverter.updateColorState(ink.name, true);
+      if (ink.name === "CMYK" && ink.isGroup) {
+        // CMYK组图标点击事件
+        ink.visible = !ink.visible;
+        const allVisible = ink.visible;
+
+        // 更新CMYK组图标状态
+        eyeIcon.classList.toggle("eyeHidden", !allVisible);
+        eyeIcon.classList.toggle("eyeVisible", allVisible);
+
+        // 更新四个通道的状态
+        const channelNames = ["青色", "洋红色", "黄色", "黑色"];
+        const colorConverterNames = ["Cyan", "Magenta", "Yellow", "Black"];
+
+        for (let i = 0; i < channelNames.length; i++) {
+          const channelName = channelNames[i];
+          const colorConverterName = colorConverterNames[i];
+          const channelInk = this.inks.find(
+            channel => channel.name === channelName
+          );
+          const channelEyeIcon = this.eyeIcons[channelName];
+
+          if (channelInk && channelEyeIcon) {
+            channelInk.visible = allVisible;
+            channelEyeIcon.classList.toggle("eyeHidden", !allVisible);
+            channelEyeIcon.classList.toggle("eyeVisible", allVisible);
+            ColorConverter.updateColorState(colorConverterName, allVisible);
+          }
+        }
       } else {
-        eyeIcon.classList.remove("eyeVisible");
-        eyeIcon.classList.add("eyeHidden");
-        ColorConverter.updateColorState(ink.name, false);
+        // 单个通道或专色点击事件
+        ink.visible = !ink.visible;
+
+        // 更新当前图标状态
+        eyeIcon.classList.toggle("eyeHidden", !ink.visible);
+        eyeIcon.classList.toggle("eyeVisible", ink.visible);
+
+        // 更新ColorConverter
+        const channelNameMap = {
+          青色: "Cyan",
+          洋红色: "Magenta",
+          黄色: "Yellow",
+          黑色: "Black",
+        };
+        const colorConverterName = channelNameMap[ink.name] || ink.name;
+        ColorConverter.updateColorState(colorConverterName, ink.visible);
+
+        // 更新CMYK组图标状态
+        this.updateCMYKGroupVisibility();
       }
     });
 
@@ -199,7 +262,40 @@ class PDFInkListViewer extends BaseTreeViewer {
     inkItem.appendChild(colorSwatch);
     inkItem.appendChild(colorName);
 
+    // 保存眼睛图标的引用
+    this.eyeIcons[ink.name] = eyeIcon;
+
     return inkItem;
+  }
+
+  /**
+   * 更新CMYK组图标的可见性状态
+   */
+  updateCMYKGroupVisibility() {
+    const cmykGroupInk = this.inks.find(
+      ink => ink.name === "CMYK" && ink.isGroup
+    );
+    const cmykGroupEyeIcon = this.eyeIcons["CMYK"];
+
+    if (cmykGroupInk && cmykGroupEyeIcon) {
+      // 检查四个通道是否都可见
+      const channelNames = ["青色", "洋红色", "黄色", "黑色"];
+      const allChannelsVisible = channelNames.every(channelName => {
+        const channelInk = this.inks.find(ink => ink.name === channelName);
+        return channelInk && channelInk.visible;
+      });
+
+      // 检查是否有通道不可见
+      const anyChannelInvisible = channelNames.some(channelName => {
+        const channelInk = this.inks.find(ink => ink.name === channelName);
+        return channelInk && !channelInk.visible;
+      });
+
+      // 更新组图标的状态
+      cmykGroupInk.visible = allChannelsVisible;
+      cmykGroupEyeIcon.classList.toggle("eyeHidden", anyChannelInvisible);
+      cmykGroupEyeIcon.classList.toggle("eyeVisible", allChannelsVisible);
+    }
   }
 
   /**
@@ -226,41 +322,57 @@ class PDFInkListViewer extends BaseTreeViewer {
       colorConfig
     );
 
-    // 初始化inks数组，添加CMYK组和通道
-    const inks = [
-      { id: 1, name: "CMYK", color: "#000000", visible: true, isGroup: true },
-      {
-        id: 2,
+    // 初始化inks数组
+    const inks = [];
+    let nextId = 1;
+
+    // 检查是否包含CMYK通道
+    const hasCyan = "Cyan" in colorConfig.colors;
+    const hasMagenta = "Magenta" in colorConfig.colors;
+    const hasYellow = "Yellow" in colorConfig.colors;
+    const hasBlack = "Black" in colorConfig.colors;
+    const hasCmyk = hasCyan && hasMagenta && hasYellow && hasBlack;
+
+    // 添加CMYK组和通道
+    if (hasCmyk) {
+      inks.push({
+        id: nextId++,
+        name: "CMYK",
+        color: "#000000",
+        visible: true,
+        isGroup: true,
+      });
+      inks.push({
+        id: nextId++,
         name: "青色",
         color: "#00A0E9",
         visible: colorConfig.colors["Cyan"] !== false,
         isGroup: false,
-      },
-      {
-        id: 3,
+      });
+      inks.push({
+        id: nextId++,
         name: "洋红色",
         color: "#E4007F",
         visible: colorConfig.colors["Magenta"] !== false,
         isGroup: false,
-      },
-      {
-        id: 4,
+      });
+      inks.push({
+        id: nextId++,
         name: "黄色",
         color: "#FFF100",
         visible: colorConfig.colors["Yellow"] !== false,
         isGroup: false,
-      },
-      {
-        id: 5,
+      });
+      inks.push({
+        id: nextId++,
         name: "黑色",
         color: "#231815",
         visible: colorConfig.colors["Black"] !== false,
         isGroup: false,
-      },
-    ];
+      });
+    }
 
     // 添加检测到的专色
-    let nextId = 6;
     for (const [colorName, visible] of Object.entries(colorConfig.colors)) {
       if (
         colorName === "Cyan" ||
@@ -299,12 +411,12 @@ class PDFInkListViewer extends BaseTreeViewer {
       this.inksContainer
     );
 
-    // Add demo inks
+    // Add inks
     for (const ink of this.inks) {
       const inkElement = this._createInkElement(ink);
       this.inksContainer.appendChild(inkElement);
       console.log(
-        `[${new Date().toISOString()}] PDFInkListViewer: 添加演示油墨项到容器:`,
+        `[${new Date().toISOString()}] PDFInkListViewer: 添加${ink.isGroup ? "CMYK组" : "油墨项"}到容器:`,
         ink
       );
     }

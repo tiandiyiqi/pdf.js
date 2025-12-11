@@ -22,6 +22,8 @@
 /** @typedef {import("./display/api").RenderTask} RenderTask */
 /** @typedef {import("./display/display_utils").PageViewport} PageViewport */
 
+import { ColorConverter } from "./core/color_converter.js";
+
 import {
   AbortException,
   AnnotationEditorParamsType,
@@ -127,6 +129,7 @@ globalThis.pdfjsLib = {
   noContextMenu,
   normalizeUnicode,
   OPS,
+  ColorConverter,
   OutputScale,
   PasswordResponses,
   PDFDataRangeTransport,

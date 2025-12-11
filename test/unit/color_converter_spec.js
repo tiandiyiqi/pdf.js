@@ -194,28 +194,45 @@ describe("color_converter", function () {
     });
 
     it("should convert DeviceN to RGB with filter", function () {
-      // Add spot colors
-      ColorConverter.addSpotColor("Spot1", true);
-      ColorConverter.addSpotColor("Spot2", false);
-      
+      // 先让 deviceNToRgbWithFilter 自动注册专色
       const channels = {
-        cmyk: [0.5, 0.5, 0.5, 0.5],
+        cmyk: [0.2, 0.2, 0.2, 0.2],
         spots: {
           Spot1: 0.8,
           Spot2: 0.8,
         },
       };
       
-      // With filter enabled
+      // 第一次调用：让系统自动注册专色
+      ColorConverter.deviceNToRgbWithFilter(channels);
+      
+      // 然后修改专色的可见性
+      ColorConverter.setColorFilterConfig({
+        enabled: true,
+        colors: {
+          Cyan: true,
+          Magenta: true,
+          Yellow: true,
+          Black: true,
+          Spot1: true,
+          Spot2: false, // Spot2 被禁用
+        },
+      });
+      
+      // 第二次调用：过滤器启用，Spot2 被禁用
       const result1 = ColorConverter.deviceNToRgbWithFilter(channels);
       expect(result1).toBeInstanceOf(Array);
       expect(result1.length).toBe(3);
       
-      // With filter disabled
-      ColorConverter.setColorFilterConfig({ enabled: false });
+      // 修改 Spot2 的可见性为启用
+      ColorConverter.updateColorState("Spot2", true);
+      
+      // 第三次调用：过滤器启用，Spot2 被启用
       const result2 = ColorConverter.deviceNToRgbWithFilter(channels);
       expect(result2).toBeInstanceOf(Array);
       expect(result2.length).toBe(3);
+      
+      // 由于 Spot2 的可见性不同，两次结果应该不同
       expect(result1).not.toEqual(result2);
     });
 

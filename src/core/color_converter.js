@@ -23,6 +23,7 @@ class ColorConverter {
       ["Yellow", true],
       ["Black", true],
     ]),
+    overprint: false, // 叠印预览开关
   };
 
   // 事件监听器
@@ -31,7 +32,11 @@ class ColorConverter {
   // 触发事件
   static #triggerEvent(eventName, data) {
     const listeners = this.#eventListeners.get(eventName) || [];
-    console.log(`[${new Date().toISOString()}] ColorConverter: 触发事件 ${eventName}，数据:`, data, `监听器数量: ${listeners.length}`);
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter: 触发事件 ${eventName}，数据:`,
+      data,
+      `监听器数量: ${listeners.length}`
+    );
     for (const listener of listeners) {
       listener(data);
     }
@@ -45,13 +50,20 @@ class ColorConverter {
     if (config?.colors && typeof config.colors === "object") {
       this.#colorFilterConfig.colors = new Map(Object.entries(config.colors));
     }
+    if (config?.overprint !== undefined) {
+      this.#colorFilterConfig.overprint = !!config.overprint;
+    }
   }
 
   static getColorFilterConfig() {
     const colors = Object.fromEntries(this.#colorFilterConfig.colors);
-    console.log(`[${new Date().toISOString()}] ColorConverter.getColorFilterConfig: 返回颜色配置，enabled: ${this.#colorFilterConfig.enabled}，colors:`, colors);
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter.getColorFilterConfig: 返回颜色配置，enabled: ${this.#colorFilterConfig.enabled}，overprint: ${this.#colorFilterConfig.overprint}，colors:`,
+      colors
+    );
     return {
       enabled: this.#colorFilterConfig.enabled,
+      overprint: this.#colorFilterConfig.overprint,
       colors: colors,
     };
   }
@@ -63,19 +75,37 @@ class ColorConverter {
   }
 
   static addSpotColor(spotName, visible = true) {
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter.addSpotColor: 开始添加专色，spotName: ${spotName}，类型: ${typeof spotName}，visible: ${visible}`
+    );
     if (typeof spotName === "string") {
-      console.log(`[${new Date().toISOString()}] ColorConverter: 尝试添加专色 ${spotName}，可见性: ${visible}`);
       const wasPresent = this.#colorFilterConfig.colors.has(spotName);
       this.#colorFilterConfig.colors.set(spotName, !!visible);
-      
+
       if (!wasPresent) {
-        console.log(`[${new Date().toISOString()}] ColorConverter: 专色 ${spotName} 首次添加，触发事件`);
+        console.log(
+          `[${new Date().toISOString()}] ColorConverter.addSpotColor: 专色 ${spotName} 首次添加，触发事件`
+        );
         // 触发专色添加事件
-        this.#triggerEvent("spotColorAdded", { name: spotName, visible: !!visible });
+        this.#triggerEvent("spotColorAdded", {
+          name: spotName,
+          visible: !!visible,
+        });
       } else {
-        console.log(`[${new Date().toISOString()}] ColorConverter: 专色 ${spotName} 已存在，跳过事件触发`);
+        console.log(
+          `[${new Date().toISOString()}] ColorConverter.addSpotColor: 专色 ${spotName} 已存在，跳过事件触发`
+        );
       }
-      console.log(`[${new Date().toISOString()}] ColorConverter: 当前专色配置:`, Object.fromEntries(this.#colorFilterConfig.colors));
+      const currentColors = Object.fromEntries(this.#colorFilterConfig.colors);
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter.addSpotColor: 添加专色后，当前颜色配置:`,
+        currentColors
+      );
+    } else {
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter.addSpotColor: 无效的专色名称，类型: ${typeof spotName}，值:`,
+        spotName
+      );
     }
   }
 
@@ -84,7 +114,7 @@ class ColorConverter {
     if (typeof eventName !== "string" || typeof listener !== "function") {
       return;
     }
-    
+
     if (!this.#eventListeners.has(eventName)) {
       this.#eventListeners.set(eventName, []);
     }
@@ -95,7 +125,7 @@ class ColorConverter {
     if (typeof eventName !== "string" || typeof listener !== "function") {
       return;
     }
-    
+
     const listeners = this.#eventListeners.get(eventName);
     if (listeners) {
       const index = listeners.indexOf(listener);
@@ -133,50 +163,89 @@ class ColorConverter {
   }
 
   static deviceNToRgbWithFilter(channels) {
-    console.log(`[${new Date().toISOString()}] ColorConverter: 进入 deviceNToRgbWithFilter 方法，通道数据:`, channels);
-    
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter: 进入 deviceNToRgbWithFilter 方法，通道数据:`,
+      channels
+    );
+
     // 先处理专色名称的自动注册
     // 检查channels的不同可能结构
     if (channels.spots) {
-      console.log(`[${new Date().toISOString()}] ColorConverter: 检测到专色通道:`, Object.keys(channels.spots));
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter: 检测到专色通道:`,
+        Object.keys(channels.spots)
+      );
       for (const [name] of Object.entries(channels.spots)) {
-        // 如果专色尚未在配置中，自动添加
-        this.addSpotColor(name);
+        // 如果专色尚未在配置中，自动添加，否则保持现有可见性
+        if (!this.#colorFilterConfig.colors.has(name)) {
+          this.addSpotColor(name);
+        }
       }
     } else if (channels.channelNames) {
-      console.log(`[${new Date().toISOString()}] ColorConverter: 检测到通道名称:`, channels.channelNames);
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter: 检测到通道名称:`,
+        channels.channelNames
+      );
       // 从通道名称中提取专色
       const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
-      const spotNames = channels.channelNames.filter(name => !cmykNames.includes(name));
-      console.log(`[${new Date().toISOString()}] ColorConverter: 提取到专色名称:`, spotNames);
+      const spotNames = channels.channelNames.filter(
+        name => !cmykNames.includes(name)
+      );
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter: 提取到专色名称:`,
+        spotNames
+      );
       spotNames.forEach(name => this.addSpotColor(name));
-    } else {
-      console.log(`[${new Date().toISOString()}] ColorConverter: 未检测到专色通道，channels结构:`, Object.keys(channels));
     }
 
     const cmyk = channels.cmyk ? this.filterCMYK(channels.cmyk) : [0, 0, 0, 0];
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter: 处理后的CMYK值:`,
+      cmyk
+    );
 
     let totalSpot = 0;
     if (channels.spots) {
       for (const [name, value] of Object.entries(channels.spots)) {
-        totalSpot += this.filterSpot(name, value);
+        const filteredValue = this.filterSpot(name, value);
+        totalSpot += filteredValue;
+        console.log(
+          `[${new Date().toISOString()}] ColorConverter: 处理专色 ${name}，原始值: ${value}，过滤后值: ${filteredValue}，累计值: ${totalSpot}`
+        );
       }
     }
 
     cmyk[3] = Math.min(1, cmyk[3] + totalSpot * 0.3);
-    return this.cmykToRgb(cmyk);
+    const rgb = this.cmykToRgb(cmyk);
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter: 最终CMYK值:`,
+      cmyk,
+      `转换为RGB值:`,
+      rgb
+    );
+    return rgb;
   }
 
   // CMYK到RGB的转换方法（基于现有逻辑）
   static cmykToRgb(cmyk) {
     const [c, m, y, k] = cmyk;
-    
-    // 简单的CMYK到RGB转换公式
-    const r = 255 * (1 - c) * (1 - k);
-    const g = 255 * (1 - m) * (1 - k);
-    const b = 255 * (1 - y) * (1 - k);
-    
-    return [Math.round(r), Math.round(g), Math.round(b)];
+
+    if (this.#colorFilterConfig.overprint) {
+      // 叠印模式：颜色直接叠加，不进行传统的CMYK混合
+      // 每个颜色分量直接转换为RGB并叠加
+      const r = 255 * (1 - c * (1 - k) - k * 0.5);
+      const g = 255 * (1 - m * (1 - k) - k * 0.5);
+      const b = 255 * (1 - y * (1 - k) - k * 0.5);
+
+      return [Math.round(r), Math.round(g), Math.round(b)];
+    } else {
+      // 普通模式：简单的CMYK到RGB转换公式
+      const r = 255 * (1 - c) * (1 - k);
+      const g = 255 * (1 - m) * (1 - k);
+      const b = 255 * (1 - y) * (1 - k);
+
+      return [Math.round(r), Math.round(g), Math.round(b)];
+    }
   }
 }
 

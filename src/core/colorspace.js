@@ -358,20 +358,38 @@ class AlternateCS extends ColorSpace {
     // 检查是否是DeviceN或Separation颜色空间，自动注册专色
     console.log(
       `[${new Date().toISOString()}] AlternateCS.constructor: 创建AlternateCS实例，numComps: ${numComps}，channelNames:`,
-      channelNames
+      channelNames,
+      `base.name: ${base.name}`
     );
 
     // 自动注册专色
     if (channelNames.length > 0) {
       const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
-      const spotNames = channelNames.filter(name => !cmykNames.includes(name));
+      console.log(
+        `[${new Date().toISOString()}] AlternateCS.constructor: CMYK名称列表:`,
+        cmykNames
+      );
+      const spotNames = channelNames.filter(name => {
+        const isCMYK = cmykNames.includes(name);
+        console.log(
+          `[${new Date().toISOString()}] AlternateCS.constructor: 检查名称 ${name}，是否为CMYK: ${isCMYK}`
+        );
+        return !isCMYK;
+      });
       console.log(
         `[${new Date().toISOString()}] AlternateCS.constructor: 检测到专色名称:`,
         spotNames
       );
       spotNames.forEach(spotName => {
+        console.log(
+          `[${new Date().toISOString()}] AlternateCS.constructor: 调用ColorConverter.addSpotColor，spotName: ${spotName}`
+        );
         ColorConverter.addSpotColor(spotName, true);
       });
+    } else {
+      console.log(
+        `[${new Date().toISOString()}] AlternateCS.constructor: 未检测到通道名称，channelNames.length: ${channelNames.length}`
+      );
     }
   }
 

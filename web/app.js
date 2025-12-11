@@ -206,9 +206,18 @@ const PDFViewerApplication = {
 
     if (overprintOptionCheckbox && overprintOptionButton) {
       // 设置初始值
-      const initialValue = false;
+      const initialValue = AppOptions.get("overprintOption");
       overprintOptionCheckbox.checked = initialValue;
       this.updateOverprintButton(overprintOptionButton, initialValue);
+
+      // 初始化ColorConverter的叠印状态
+      if (typeof ColorConverter !== "undefined") {
+        const currentConfig = ColorConverter.getColorFilterConfig();
+        ColorConverter.setColorFilterConfig({
+          ...currentConfig,
+          overprint: initialValue,
+        });
+      }
 
       // 按钮点击事件
       overprintOptionButton.addEventListener("click", () => {
@@ -236,6 +245,14 @@ const PDFViewerApplication = {
 
   setOverprintOption(enabled) {
     AppOptions.set("overprintOption", enabled);
+    // 更新ColorConverter的叠印状态
+    if (typeof ColorConverter !== "undefined") {
+      const currentConfig = ColorConverter.getColorFilterConfig();
+      ColorConverter.setColorFilterConfig({
+        ...currentConfig,
+        overprint: enabled,
+      });
+    }
     // 重新渲染当前页面
     if (this.pdfViewer) {
       // 获取当前可见页面
