@@ -16,7 +16,7 @@
 /** @typedef {import("./event_utils.js").EventBus} EventBus */
 
 import { BaseTreeViewer } from "./base_tree_viewer.js";
-import { ColorConverter } from "../src/core/color_converter.js";
+import { ColorConverter } from "./pdfjs.js";
 
 /**
  * @typedef {Object} PDFInkListViewerOptions
@@ -405,28 +405,28 @@ class PDFInkListViewer extends BaseTreeViewer {
         id: nextId++,
         name: "青色",
         color: "#00A0E9",
-        visible: colorConfig.colors["Cyan"] !== false,
+        visible: colorConfig.colors.Cyan !== false,
         isGroup: false,
       });
       inks.push({
         id: nextId++,
         name: "洋红色",
         color: "#E4007F",
-        visible: colorConfig.colors["Magenta"] !== false,
+        visible: colorConfig.colors.Magenta !== false,
         isGroup: false,
       });
       inks.push({
         id: nextId++,
         name: "黄色",
         color: "#FFF100",
-        visible: colorConfig.colors["Yellow"] !== false,
+        visible: colorConfig.colors.Yellow !== false,
         isGroup: false,
       });
       inks.push({
         id: nextId++,
         name: "黑色",
         color: "#231815",
-        visible: colorConfig.colors["Black"] !== false,
+        visible: colorConfig.colors.Black !== false,
         isGroup: false,
       });
     }
