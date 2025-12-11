@@ -258,7 +258,13 @@ class ColorSpaceUtils {
           numComps = Array.isArray(name) ? name.length : 1;
           baseCS = this.#subParse(cs[2], options);
           const tintFn = pdfFunctionFactory.create(cs[3]);
-          return new AlternateCS(numComps, baseCS, tintFn);
+          // 新增：提取并传递通道名称
+          const channelNames = Array.isArray(name)
+            ? name.map(n => (n && n.name ? n.name : String(n)))
+            : name && name.name
+              ? [name.name]
+              : [String(name)];
+          return new AlternateCS(numComps, baseCS, tintFn, channelNames);
         case "Lab":
           params = xref.fetchIfRef(cs[1]);
           whitePoint = params.getArray("WhitePoint");

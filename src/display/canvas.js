@@ -42,6 +42,8 @@ import {
   TilingPattern,
 } from "./pattern_helper.js";
 import { convertBlackAndWhiteToRGBA } from "../shared/image_utils.js";
+import { ColorValue } from "../core/color_value.js";
+import { BlendModeFactory } from "../core/blend_modes.js";
 
 // <canvas> contexts store most of the state we need natively.
 // However, PDF needs a bit more state, which we store here.
@@ -1221,11 +1223,35 @@ class CanvasGraphics {
             opIdx
           );
           if (this.overprintOption) {
-            this.ctx.globalCompositeOperation = value;
-            // Also set both fill and stroke composite operations to maintain
-            // backward compatibility
-            this.current.fillCompositeOperation = value;
-            this.current.strokeCompositeOperation = value;
+            // 检测CMYK颜色 + 非Normal混合模式
+            const hasCMYKColor =
+              this.current.fillColorValue?.colorSpace === "CMYK" ||
+              this.current.fillColorValue?.colorSpace === "DEVICEN" ||
+              this.current.strokeColorValue?.colorSpace === "CMYK" ||
+              this.current.strokeColorValue?.colorSpace === "DEVICEN";
+
+            // 特别处理：darken和multiply用于叠印(Overprint)模拟，不应禁用
+            // 在evaluator.js中，当检测到OP/op属性时，会强制设置BM为darken
+            // 这是模拟叠印效果的标准做法
+            const isOverprintMode = value === "darken" || value === "multiply";
+
+            if (hasCMYKColor && value !== "source-over" && !isOverprintMode) {
+              // 其他CMYK混合模式暂不支持，降级为Normal
+              warn(
+                `PDF.js: CMYK/DeviceN blend mode "${value}" is not yet supported. ` +
+                  `Falling back to Normal mode. This may cause incorrect rendering for ` +
+                  `transparency effects. See https://github.com/mozilla/pdf.js/issues/XXXXX`
+              );
+              this.ctx.globalCompositeOperation = "source-over";
+              this.current.fillCompositeOperation = "source-over";
+              this.current.strokeCompositeOperation = "source-over";
+            } else {
+              this.ctx.globalCompositeOperation = value;
+              // Also set both fill and stroke composite operations to maintain
+              // backward compatibility
+              this.current.fillCompositeOperation = value;
+              this.current.strokeCompositeOperation = value;
+            }
           }
           break;
         case "fillBM":
@@ -2457,7 +2483,29 @@ class CanvasGraphics {
 
   setStrokeRGBColor(opIdx, color) {
     this.dependencyTracker?.recordSimpleData("strokeColor", opIdx);
-    this.ctx.strokeStyle = this.current.strokeColor = color;
+
+    // 新逻辑：处理ColorValue对象
+    // 检测是否为ColorValue对象（可能经过序列化，失去了原型）
+    if (color && typeof color === "object" && color.colorSpace) {
+      // ColorValue从worker传递过来后失去了方法，需要重建
+      let colorValue;
+      if (typeof color.toRGB === "function") {
+        colorValue = color; // 已经是ColorValue实例
+      } else {
+        // 反序列化ColorValue
+        colorValue = ColorValue.deserialize(color);
+      }
+
+      // 存储ColorValue以供后续混合使用
+      this.current.strokeColorValue = colorValue;
+      // 转换为RGB用于Canvas渲染
+      this.ctx.strokeStyle = this.current.strokeColor = colorValue.toRGB();
+    } else {
+      // 向后兼容：直接使用RGB字符串
+      this.current.strokeColorValue = null;
+      this.ctx.strokeStyle = this.current.strokeColor = color;
+    }
+
     this.current.patternStroke = false;
   }
 
@@ -2469,7 +2517,53 @@ class CanvasGraphics {
 
   setFillRGBColor(opIdx, color) {
     this.dependencyTracker?.recordSimpleData("fillColor", opIdx);
-    this.ctx.fillStyle = this.current.fillColor = color;
+
+    // 调试：记录接收到的颜色
+    if (color && typeof color === "object" && color.colorSpace) {
+      console.log("[DEBUG canvas.js] setFillRGBColor received ColorValue:", {
+        colorSpace: color.colorSpace,
+        channels: color.channels,
+        rgbFallback: color.rgbFallback,
+      });
+    } else {
+      console.log(
+        "[DEBUG canvas.js] setFillRGBColor received:",
+        typeof color,
+        color
+      );
+    }
+
+    // 新逻辑：处理ColorValue对象
+    // 检测是否为ColorValue对象（可能经过序列化，失去了原型）
+    if (color && typeof color === "object" && color.colorSpace) {
+      console.log(
+        "[DEBUG canvas.js] Detected ColorValue object:",
+        color.colorSpace
+      );
+      // ColorValue从worker传递过来后失去了方法，需要重建
+      let colorValue;
+      if (typeof color.toRGB === "function") {
+        colorValue = color; // 已经是ColorValue实例
+        console.log("[DEBUG canvas.js] ColorValue already has toRGB method");
+      } else {
+        // 反序列化ColorValue
+        console.log("[DEBUG canvas.js] Deserializing ColorValue");
+        colorValue = ColorValue.deserialize(color);
+      }
+
+      // 存储ColorValue以供后续混合使用
+      this.current.fillColorValue = colorValue;
+      // 转换为RGB用于Canvas渲染
+      const rgbColor = colorValue.toRGB();
+      console.log(`[DEBUG canvas.js] ColorValue converted to RGB: ${rgbColor}`);
+      this.ctx.fillStyle = this.current.fillColor = rgbColor;
+    } else {
+      // 向后兼容：直接使用RGB字符串
+      console.log("[DEBUG canvas.js] Using old RGB logic, color:", color);
+      this.current.fillColorValue = null;
+      this.ctx.fillStyle = this.current.fillColor = color;
+    }
+
     this.current.patternFill = false;
   }
 

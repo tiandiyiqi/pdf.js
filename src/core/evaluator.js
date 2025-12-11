@@ -73,6 +73,7 @@ import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
+import { ColorValue, ColorValueBuilder } from "./color_value.js";
 import { getFontSubstitution } from "./font_substitutions.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
@@ -2034,40 +2035,197 @@ class PartialEvaluator {
           }
           case OPS.setFillColor:
             cs = stateManager.state.fillColorSpace;
-            args = [cs.getRgbHex(args, 0)];
-            fn = OPS.setFillRGBColor;
+            // 调试：记录颜色空间信息
+            info(
+              `[DEBUG] setFillColor: colorSpace=${cs?.name || "unknown"}, args=${JSON.stringify(args)}`
+            );
+            // 新逻辑：检查颜色空间类型
+            if (cs === ColorSpaceUtils.cmyk || cs.name === "DeviceCMYK") {
+              // CMYK颜色空间：创建ColorValue
+              info("[DEBUG] setFillColor: Creating CMYK ColorValue");
+              try {
+                const cmykValues = [args[0], args[1], args[2], args[3]];
+                const colorValue = ColorValueBuilder.createCMYK(cmykValues);
+                info(
+                  `[DEBUG] Created CMYK ColorValue: ${JSON.stringify(cmykValues)} → RGB=${colorValue.toRGB()}`
+                );
+                args = [colorValue];
+                fn = OPS.setFillRGBColor;
+              } catch (e) {
+                warn(`Failed to create CMYK ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setFillRGBColor;
+              }
+            } else if (cs.name === "DeviceN" || cs.name === "Separation") {
+              // DeviceN/Separation颜色空间：创建ColorValue
+              try {
+                const channelNames =
+                  cs.channelNames || cs.getChannelNames?.() || [];
+                if (channelNames.length > 0) {
+                  const colorValue = ColorValueBuilder.createDeviceN(
+                    channelNames,
+                    args
+                  );
+                  args = [colorValue];
+                  fn = OPS.setFillRGBColor;
+                } else {
+                  args = [cs.getRgbHex(args, 0)];
+                  fn = OPS.setFillRGBColor;
+                }
+              } catch (e) {
+                warn(`Failed to create DeviceN ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setFillRGBColor;
+              }
+            } else if (
+              cs === ColorSpaceUtils.gray ||
+              cs.name === "DeviceGray"
+            ) {
+              // Gray颜色空间：创建ColorValue
+              try {
+                const colorValue = ColorValueBuilder.createGray(args[0]);
+                args = [colorValue];
+                fn = OPS.setFillRGBColor;
+              } catch (e) {
+                warn(`Failed to create Gray ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setFillRGBColor;
+              }
+            } else {
+              // 其他颜色空间（RGB等）：使用旧逻辑
+              info(
+                `[DEBUG] setFillColor: Using old logic for ${cs?.name || "unknown"}`
+              );
+              args = [cs.getRgbHex(args, 0)];
+              fn = OPS.setFillRGBColor;
+            }
             break;
           case OPS.setStrokeColor:
             cs = stateManager.state.strokeColorSpace;
-            args = [cs.getRgbHex(args, 0)];
-            fn = OPS.setStrokeRGBColor;
+            // 新逻辑：检查颜色空间类型
+            if (cs === ColorSpaceUtils.cmyk || cs.name === "DeviceCMYK") {
+              // CMYK颜色空间：创建ColorValue
+              try {
+                const cmykValues = [args[0], args[1], args[2], args[3]];
+                const colorValue = ColorValueBuilder.createCMYK(cmykValues);
+                args = [colorValue];
+                fn = OPS.setStrokeRGBColor;
+              } catch (e) {
+                warn(`Failed to create CMYK ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setStrokeRGBColor;
+              }
+            } else if (cs.name === "DeviceN" || cs.name === "Separation") {
+              // DeviceN/Separation颜色空间：创建ColorValue
+              try {
+                const channelNames =
+                  cs.channelNames || cs.getChannelNames?.() || [];
+                if (channelNames.length > 0) {
+                  const colorValue = ColorValueBuilder.createDeviceN(
+                    channelNames,
+                    args
+                  );
+                  args = [colorValue];
+                  fn = OPS.setStrokeRGBColor;
+                } else {
+                  args = [cs.getRgbHex(args, 0)];
+                  fn = OPS.setStrokeRGBColor;
+                }
+              } catch (e) {
+                warn(`Failed to create DeviceN ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setStrokeRGBColor;
+              }
+            } else if (
+              cs === ColorSpaceUtils.gray ||
+              cs.name === "DeviceGray"
+            ) {
+              // Gray颜色空间：创建ColorValue
+              try {
+                const colorValue = ColorValueBuilder.createGray(args[0]);
+                args = [colorValue];
+                fn = OPS.setStrokeRGBColor;
+              } catch (e) {
+                warn(`Failed to create Gray ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setStrokeRGBColor;
+              }
+            } else {
+              // 其他颜色空间（RGB等）：使用旧逻辑
+              args = [cs.getRgbHex(args, 0)];
+              fn = OPS.setStrokeRGBColor;
+            }
             break;
           case OPS.setFillGray:
             stateManager.state.fillColorSpace = ColorSpaceUtils.gray;
-            args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
-            fn = OPS.setFillRGBColor;
+            // 新逻辑：创建Gray ColorValue
+            try {
+              const grayValue = args[0];
+              const colorValue = ColorValueBuilder.createGray(grayValue);
+              args = [colorValue];
+              // 保持fn不变，但实际上Gray通常会快速转RGB
+              fn = OPS.setFillRGBColor; // Gray可以直接转RGB，性能影响小
+            } catch (e) {
+              // 回退到旧逻辑
+              warn(`Failed to create Gray ColorValue: ${e}`);
+              args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+              fn = OPS.setFillRGBColor;
+            }
             break;
           case OPS.setStrokeGray:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.gray;
-            args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
-            fn = OPS.setStrokeRGBColor;
+            try {
+              const grayValue = args[0];
+              const colorValue = ColorValueBuilder.createGray(grayValue);
+              args = [colorValue];
+              fn = OPS.setStrokeRGBColor;
+            } catch (e) {
+              args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+              fn = OPS.setStrokeRGBColor;
+            }
             break;
           case OPS.setFillCMYKColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.cmyk;
-            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
-            fn = OPS.setFillRGBColor;
+            // 新逻辑：保留CMYK原始值，创建ColorValue对象
+            try {
+              const cmykValues = [args[0], args[1], args[2], args[3]];
+              const colorValue = ColorValueBuilder.createCMYK(cmykValues);
+              args = [colorValue];
+              // 重要：仍然使用setFillRGBColor，但传递ColorValue对象
+              // canvas.js会检测到ColorValue并调用toRGB()
+              fn = OPS.setFillRGBColor;
+            } catch (e) {
+              // 回退到旧逻辑
+              warn(`Failed to create CMYK ColorValue: ${e}`);
+              args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
+              fn = OPS.setFillRGBColor;
+            }
             break;
           case OPS.setStrokeCMYKColor:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.cmyk;
-            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
-            fn = OPS.setStrokeRGBColor;
+            // 新逻辑：保留CMYK原始值
+            try {
+              const cmykValues = [args[0], args[1], args[2], args[3]];
+              const colorValue = ColorValueBuilder.createCMYK(cmykValues);
+              args = [colorValue];
+              // 重要：仍然使用setStrokeRGBColor，但传递ColorValue对象
+              fn = OPS.setStrokeRGBColor;
+            } catch (e) {
+              // 回退到旧逻辑
+              warn(`Failed to create CMYK ColorValue: ${e}`);
+              args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
+              fn = OPS.setStrokeRGBColor;
+            }
             break;
           case OPS.setFillRGBColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.rgb;
+            // RGB处理：为了向后兼容，可以继续使用hex字符串，或使用ColorValue
+            // 这里保持旧逻辑以确保向后兼容
             args = [ColorSpaceUtils.rgb.getRgbHex(args, 0)];
             break;
           case OPS.setStrokeRGBColor:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.rgb;
+            // RGB处理：保持向后兼容
             args = [ColorSpaceUtils.rgb.getRgbHex(args, 0)];
             break;
           case OPS.setFillColorN:
@@ -2099,8 +2257,58 @@ class PartialEvaluator {
               );
               return;
             }
-            args = [cs.getRgbHex(args, 0)];
-            fn = OPS.setFillRGBColor;
+            // 调试：记录setFillColorN的颜色空间信息
+            info(
+              `[DEBUG] setFillColorN: colorSpace=${cs?.name || "unknown"}, args=${JSON.stringify(args)}`
+            );
+            // 新逻辑：处理DeviceN或Separation色彩空间
+            if (cs.name === "DeviceN" || cs.name === "Separation") {
+              try {
+                // 假设cs有channelNames属性(需要在colorspace.js中实现)
+                const channelNames =
+                  cs.channelNames || cs.getChannelNames?.() || [];
+                const channelValues = args;
+                info(
+                  `[DEBUG] setFillColorN: DeviceN/Separation detected, channelNames.length=${channelNames.length}, channelValues.length=${channelValues.length}`
+                );
+                if (channelNames.length > 0 && channelValues.length > 0) {
+                  const colorValue = ColorValueBuilder.createDeviceN(
+                    channelNames,
+                    channelValues
+                  );
+                  info(
+                    `[DEBUG] setFillColorN: Created DeviceN ColorValue, RGB=${colorValue.toRGB()}`
+                  );
+                  args = [colorValue];
+                  // 重要：使用setFillRGBColor，canvas.js会检测ColorValue
+                  fn = OPS.setFillRGBColor;
+                } else {
+                  // 回退到旧逻辑
+                  const rgbHex = cs.getRgbHex(args, 0);
+                  info(
+                    `[DEBUG] setFillColorN: No channelNames, using old logic, RGB=${rgbHex}`
+                  );
+                  args = [rgbHex];
+                  fn = OPS.setFillRGBColor;
+                }
+              } catch (e) {
+                warn(`Failed to create DeviceN ColorValue: ${e}`);
+                const rgbHex = cs.getRgbHex(args, 0);
+                info(
+                  `[DEBUG] setFillColorN: Exception, using old logic, RGB=${rgbHex}`
+                );
+                args = [rgbHex];
+                fn = OPS.setFillRGBColor;
+              }
+            } else {
+              // 其他颜色空间：使用旧逻辑
+              const rgbHex = cs.getRgbHex(args, 0);
+              info(
+                `[DEBUG] setFillColorN: Other colorSpace (${cs?.name || "unknown"}), using old logic, RGB=${rgbHex}`
+              );
+              args = [rgbHex];
+              fn = OPS.setFillRGBColor;
+            }
             break;
           case OPS.setStrokeColorN:
             cs = stateManager.state.patternStrokeColorSpace;
@@ -2131,8 +2339,34 @@ class PartialEvaluator {
               );
               return;
             }
-            args = [cs.getRgbHex(args, 0)];
-            fn = OPS.setStrokeRGBColor;
+            // 新逻辑：处理DeviceN或Separation色彩空间
+            if (cs.name === "DeviceN" || cs.name === "Separation") {
+              try {
+                const channelNames =
+                  cs.channelNames || cs.getChannelNames?.() || [];
+                const channelValues = args;
+                if (channelNames.length > 0 && channelValues.length > 0) {
+                  const colorValue = ColorValueBuilder.createDeviceN(
+                    channelNames,
+                    channelValues
+                  );
+                  args = [colorValue];
+                  // 重要：使用setStrokeRGBColor，canvas.js会检测ColorValue
+                  fn = OPS.setStrokeRGBColor;
+                } else {
+                  args = [cs.getRgbHex(args, 0)];
+                  fn = OPS.setStrokeRGBColor;
+                }
+              } catch (e) {
+                warn(`Failed to create DeviceN ColorValue: ${e}`);
+                args = [cs.getRgbHex(args, 0)];
+                fn = OPS.setStrokeRGBColor;
+              }
+            } else {
+              // 其他颜色空间：使用旧逻辑
+              args = [cs.getRgbHex(args, 0)];
+              fn = OPS.setStrokeRGBColor;
+            }
             break;
 
           case OPS.shadingFill:

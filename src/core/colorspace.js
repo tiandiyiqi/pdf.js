@@ -347,11 +347,21 @@ class ColorSpace {
  * The default color is `new Float32Array(new Array(numComps).fill(1))`.
  */
 class AlternateCS extends ColorSpace {
-  constructor(numComps, base, tintFn) {
+  constructor(numComps, base, tintFn, channelNames = null) {
     super("Alternate", numComps);
     this.base = base;
     this.tintFn = tintFn;
     this.tmpBuf = new Float32Array(base.numComps);
+    // 新增：存储通道名称，用于DeviceN色彩空间
+    this.channelNames = channelNames;
+  }
+
+  /**
+   * 获取通道名称列表
+   * @returns {Array<string>|null}
+   */
+  getChannelNames() {
+    return this.channelNames ? [...this.channelNames] : null;
   }
 
   getRgbItem(src, srcOffset, dest, destOffset) {
