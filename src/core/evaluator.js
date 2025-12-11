@@ -2380,6 +2380,34 @@ class PartialEvaluator {
       // Some PDFs don't close all restores inside object/form.
       // Closing those for them.
       closePendingRestoreOPS();
+
+      // 收集专色信息
+      try {
+        const spotColors = new Set();
+        // 遍历localColorSpaceCache查找专色
+        for (const cs of localColorSpaceCache.getAll()) {
+          if (cs && cs.name === "Alternate" && cs.channelNames) {
+            const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
+            for (const channelName of cs.channelNames) {
+              if (!cmykNames.includes(channelName)) {
+                spotColors.add(channelName);
+              }
+            }
+          }
+        }
+        // 将专色信息添加到operatorList
+        operatorList.spotColors = spotColors;
+        console.log(
+          `[${new Date().toISOString()}] Evaluator.getOperatorList: 收集到专色:`,
+          Array.from(spotColors)
+        );
+      } catch (e) {
+        console.error(
+          `[${new Date().toISOString()}] Evaluator.getOperatorList: 收集专色时出错:`,
+          e
+        );
+      }
+
       resolve();
     }).catch(reason => {
       if (reason instanceof AbortException) {

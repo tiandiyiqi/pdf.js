@@ -31,8 +31,9 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.nextId = 6; // 从6开始，避免与demo数据冲突
     this.inksContainer = null;
     this.eyeIcons = {}; // 保存眼睛图标的引用
+    this._firstPageRendered = false; // 标记第一页是否已渲染
 
-    // 添加专色事件监听器
+    // 添加专色事件监听器（虽然worker线程的事件无法传递到主线程，但保留以备将来扩展）
     console.log(
       `[${new Date().toISOString()}] PDFInkListViewer.constructor: 添加专色事件监听器`
     );
@@ -41,6 +42,62 @@ class PDFInkListViewer extends BaseTreeViewer {
       "spotColorAdded",
       this._handleSpotColorAdded
     );
+
+    // 监听页面渲染事件，在第一页渲染完成后更新油墨列表
+    this._handlePageRendered = this._handlePageRendered.bind(this);
+    this.eventBus._on("pagerendered", this._handlePageRendered);
+    console.log(
+      `[${new Date().toISOString()}] PDFInkListViewer.constructor: 添加页面渲染事件监听器`
+    );
+  }
+
+  /**
+   * Handle page rendered event
+   */
+  async _handlePageRendered(evt) {
+    // 只在第一页渲染完成时更新一次
+    if (!this._firstPageRendered && evt.pageNumber === 1) {
+      this._firstPageRendered = true;
+      console.log(
+        `[${new Date().toISOString()}] PDFInkListViewer: 第一页渲染完成，尝试提取专色信息`
+      );
+
+      try {
+        // 从evt.source获取页面代理对象
+        const pageView = evt.source;
+        if (pageView && pageView.pdfPage) {
+          const opList = await pageView.pdfPage.getOperatorList();
+          console.log(
+            `[${new Date().toISOString()}] PDFInkListViewer: 获取到operatorList，spotColors:`,
+            opList.spotColors
+          );
+
+          // 如果operatorList包含专色信息，将它们添加到主线程的ColorConverter中
+          if (
+            opList.spotColors &&
+            Array.isArray(opList.spotColors) &&
+            opList.spotColors.length > 0
+          ) {
+            for (const spotName of opList.spotColors) {
+              console.log(
+                `[${new Date().toISOString()}] PDFInkListViewer: 从operatorList添加专色: ${spotName}`
+              );
+              ColorConverter.addSpotColor(spotName, true);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(
+          `[${new Date().toISOString()}] PDFInkListViewer: 提取专色信息时出错:`,
+          error
+        );
+      }
+
+      // 延迟一小段时间后重新render
+      setTimeout(() => {
+        this.render();
+      }, 100);
+    }
   }
 
   reset() {
@@ -49,6 +106,7 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.nextId = 6;
     this.inksContainer = null;
     this.eyeIcons = {};
+    // 注意：不要在这里重置_firstPageRendered，因为reset会在render中被调用
   }
 
   destroy() {
@@ -57,6 +115,7 @@ class PDFInkListViewer extends BaseTreeViewer {
       "spotColorAdded",
       this._handleSpotColorAdded
     );
+    this.eventBus._off("pagerendered", this._handlePageRendered);
     super.destroy();
   }
 
@@ -203,8 +262,8 @@ class PDFInkListViewer extends BaseTreeViewer {
     colorName.className = "colorName";
     colorName.textContent = ink.name;
 
-    // Bind click event to eye icon
-    eyeIcon.addEventListener("click", () => {
+    // Bind click event to entire ink item row
+    inkItem.addEventListener("click", () => {
       if (ink.name === "CMYK" && ink.isGroup) {
         // CMYK组图标点击事件
         ink.visible = !ink.visible;
@@ -257,10 +316,10 @@ class PDFInkListViewer extends BaseTreeViewer {
     });
 
     // Assemble ink item
-    eyeContainer.appendChild(eyeIcon);
-    inkItem.appendChild(eyeContainer);
-    inkItem.appendChild(colorSwatch);
-    inkItem.appendChild(colorName);
+    eyeContainer.append(eyeIcon);
+    inkItem.append(eyeContainer);
+    inkItem.append(colorSwatch);
+    inkItem.append(colorName);
 
     // 保存眼睛图标的引用
     this.eyeIcons[ink.name] = eyeIcon;

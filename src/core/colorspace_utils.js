@@ -181,11 +181,28 @@ class ColorSpaceUtils {
               colorSpaces
             );
             if (colorSpaces instanceof Dict) {
-              console.log(
-                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ColorSpace字典中的键:`,
-                Object.keys(colorSpaces.map)
-              );
+              // Dict对象的map属性是私有的，使用_map访问
+              try {
+                const keys = colorSpaces._map
+                  ? Array.from(colorSpaces._map.keys())
+                  : [];
+                console.log(
+                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: ColorSpace字典中的键:`,
+                  keys
+                );
+              } catch (e) {
+                console.log(
+                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 无法获取ColorSpace字典键，错误:`,
+                  e
+                );
+              }
+
               const resourcesCS = colorSpaces.get(cs.name);
+              console.log(
+                `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从ColorSpace字典查找 ${cs.name}，结果:`,
+                resourcesCS
+              );
+
               if (resourcesCS) {
                 if (resourcesCS instanceof Name) {
                   console.log(
@@ -194,7 +211,7 @@ class ColorSpaceUtils {
                   return this.#parse(resourcesCS, options);
                 }
                 console.log(
-                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从资源中获取颜色空间，cs:`,
+                  `[${new Date().toISOString()}] ColorSpaceUtils.#parse: 从资源中获取颜色空间，开始递归解析，cs:`,
                   resourcesCS
                 );
                 cs = resourcesCS;

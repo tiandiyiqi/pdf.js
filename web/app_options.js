@@ -203,7 +203,7 @@ const defaultOptions = {
   },
   overprintOption: {
     /** @type {boolean} */
-    value: true,
+    value: false,
     kind: OptionKind.VIEWER + OptionKind.API,
   },
   disableHistory: {

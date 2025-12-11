@@ -667,6 +667,7 @@ class OperatorList {
     this._totalLength = 0;
     this.weight = 0;
     this._resolved = streamSink ? null : Promise.resolve();
+    this.spotColors = new Set(); // 用于收集专色名称
   }
 
   static setOptions({ isOffscreenCanvasSupported }) {
@@ -756,6 +757,7 @@ class OperatorList {
       fnArray: this.fnArray,
       argsArray: this.argsArray,
       length: this.length,
+      spotColors: this.spotColors ? Array.from(this.spotColors) : [], // 转换Set为Array以支持序列化
     };
   }
 
@@ -802,17 +804,20 @@ class OperatorList {
     const length = this.length;
     this._totalLength += length;
 
-    this._streamSink.enqueue(
-      {
-        fnArray: this.fnArray,
-        argsArray: this.argsArray,
-        lastChunk,
-        separateAnnots,
-        length,
-      },
-      1,
-      this._transfers
-    );
+    const data = {
+      fnArray: this.fnArray,
+      argsArray: this.argsArray,
+      lastChunk,
+      separateAnnots,
+      length,
+    };
+    
+    // 在最后一个chunk中包含专色信息
+    if (lastChunk && this.spotColors) {
+      data.spotColors = Array.from(this.spotColors);
+    }
+
+    this._streamSink.enqueue(data, 1, this._transfers);
 
     this.dependencies.clear();
     this.fnArray.length = 0;

@@ -51,6 +51,32 @@ class BaseLocalCache {
   set(name, ref, data) {
     unreachable("Abstract method `set` called.");
   }
+
+  /**
+   * Get all cached items
+   * @returns {Array} Array of all cached items
+   */
+  getAll() {
+    const items = [];
+    if (!this._onlyRefs) {
+      // Add all items from _imageMap
+      for (const item of this._imageMap.values()) {
+        items.push(item);
+      }
+    }
+    // Add all items from _imageCache
+    try {
+      const cacheItems = this._imageCache.items();
+      if (cacheItems && typeof cacheItems[Symbol.iterator] === "function") {
+        for (const item of cacheItems) {
+          items.push(item);
+        }
+      }
+    } catch (e) {
+      // _imageCache might not have an items() method, ignore
+    }
+    return items;
+  }
 }
 
 class LocalImageCache extends BaseLocalCache {

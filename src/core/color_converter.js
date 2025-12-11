@@ -109,6 +109,47 @@ class ColorConverter {
     }
   }
 
+  /**
+   * 从PDF文档中提取专色信息（主线程专用）
+   * @param {PDFDocumentProxy} pdfDocument - PDF文档代理对象
+   * @returns {Promise<string[]>} 专色名称列表
+   */
+  static async extractSpotColorsFromPDF(pdfDocument) {
+    console.log(
+      `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 开始提取专色`
+    );
+
+    if (!pdfDocument || !pdfDocument.numPages) {
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 无效的PDF文档`
+      );
+      return [];
+    }
+
+    const spotColors = new Set();
+
+    try {
+      // 只扫描第一页（通常足够）
+      const page = await pdfDocument.getPage(1);
+      const opList = await page.getOperatorList();
+
+      console.log(
+        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 获取到第一页的操作列表，操作数: ${opList.fnArray.length}`
+      );
+
+      // 注意：这里我们无法直接访问ColorSpace对象，因为那些在Worker线程
+      // 但我们可以通过其他方式（如PDF元数据）获取专色信息
+      // 暂时返回空数组，让PDF文档加载后通过其他机制填充
+    } catch (error) {
+      console.error(
+        `[${new Date().toISOString()}] ColorConverter.extractSpotColorsFromPDF: 提取专色时出错:`,
+        error
+      );
+    }
+
+    return Array.from(spotColors);
+  }
+
   // 事件管理方法
   static addEventListener(eventName, listener) {
     if (typeof eventName !== "string" || typeof listener !== "function") {
