@@ -20,6 +20,19 @@
 /** @typedef {import("../src/display/api.js").PDFDocumentLoadingTask} PDFDocumentLoadingTask */
 
 import { AppOptions, OptionKind } from "./app_options.js";
+import { CaretBrowsingMode } from "./caret_browsing.js";
+import { CommentManager } from "./comment_manager.js";
+import { EditorUndoBar } from "./editor_undo_bar.js";
+import { EventBus, FirefoxEventBus } from "./event_utils.js";
+import { OverlayManager } from "./overlay_manager.js";
+import { PasswordPrompt } from "./password_prompt.js";
+import { PDFFindController } from "./pdf_find_controller.js";
+import { PDFHistory } from "./pdf_history.js";
+import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
+import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
+import { PDFScriptingManager } from "./pdf_scripting_manager.js";
+import { PdfTextExtractor } from "./pdf_text_extractor.js";
+import { PDFViewer } from "./pdf_viewer.js";
 import {
   animationStarted,
   apiPageLayoutToViewerModes,
@@ -41,6 +54,7 @@ import {
   SpreadMode,
   TextLayerMode,
 } from "./ui_utils.js";
+import { ViewHistory } from "./view_history.js";
 import {
   AnnotationEditorType,
   build,
@@ -61,27 +75,14 @@ import {
   updateUrlHash,
   version,
 } from "pdfjs-lib";
-import { CaretBrowsingMode } from "./caret_browsing.js";
-import { CommentManager } from "./comment_manager.js";
-import { EditorUndoBar } from "./editor_undo_bar.js";
-import { EventBus, FirefoxEventBus } from "./event_utils.js";
-import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
-import { OverlayManager } from "./overlay_manager.js";
-import { PasswordPrompt } from "./password_prompt.js";
-import { PdfTextExtractor } from "./pdf_text_extractor.js";
-import { PDFFindController } from "./pdf_find_controller.js";
-import { PDFHistory } from "./pdf_history.js";
-import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
-import { PDFScriptingManager } from "./pdf_scripting_manager.js";
-import { ViewHistory } from "./view_history.js";
-import {
-  ImageAltTextSettings,
-  NewAltTextManager,
-} from "web-new_alt_text_manager";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
 import { DownloadManager } from "web-download_manager";
 import { ExternalServices, initCom, MLManager } from "web-external_services";
+import {
+  ImageAltTextSettings,
+  NewAltTextManager,
+} from "web-new_alt_text_manager";
 import { PDFAttachmentViewer } from "web-pdf_attachment_viewer";
 import { PDFCursorTools } from "web-pdf_cursor_tools";
 import { PDFDocumentProperties } from "web-pdf_document_properties";
@@ -91,10 +92,9 @@ import { PDFLayerViewer } from "web-pdf_layer_viewer";
 import { PDFOutlineViewer } from "web-pdf_outline_viewer";
 import { PDFPresentationMode } from "web-pdf_presentation_mode";
 import { PDFPrintServiceFactory } from "web-print_service";
-import { Preferences } from "web-preferences";
 import { PDFSidebar } from "web-pdf_sidebar";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
-import { PDFViewer } from "./pdf_viewer.js";
+import { Preferences } from "web-preferences";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { SignatureManager } from "web-signature_manager";
 import { Toolbar } from "web-toolbar";
@@ -1695,8 +1695,69 @@ const PDFViewerApplication = {
           });
           this.eventBus.dispatch("documentinit", { source: this });
 
-          // 重新渲染油墨列表，显示初始CMYK数据
-          this.pdfInkListViewer?.render();
+          // // 测试：在渲染油墨列表之前设置 Magenta 和 DIC 234s 为 false，以测试颜色过滤机制
+          // // 注意：这只设置主线程的配置，不会立即生效，需要通过油墨列表UI点击眼睛图标触发重新加载
+          // if (
+          //   typeof window !== "undefined" &&
+          //   window.pdfjsLib?.ColorConverter
+          // ) {
+          //   // #region agent log
+          //   fetch(
+          //     "http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5",
+          //     {
+          //       method: "POST",
+          //       headers: { "Content-Type": "application/json" },
+          //       body: JSON.stringify({
+          //         location: "app.js:1707",
+          //         message: "Test filter setup - main thread",
+          //         data: {
+          //           hasColorConverter: !!window.pdfjsLib.ColorConverter
+          //         },
+          //         timestamp: Date.now(),
+          //         sessionId: "debug-session",
+          //         hypothesisId: "E",
+          //       }),
+          //     }
+          //   ).catch(() => {});
+          //   // #endregion
+
+          //   console.log("[测试] 开始设置颜色过滤器（仅主线程）");
+          //   // 设置 Magenta 为 false
+          //   window.pdfjsLib.ColorConverter.updateColorState(
+          //     "Magenta",
+          //     false
+          //   );
+          //   // 添加 DIC 234s 并设为 false
+          //   window.pdfjsLib.ColorConverter.addSpotColor(
+          //     "DIC 234s",
+          //     false
+          //   );
+          //   console.log(
+          //     "[测试] 颜色过滤器已设置（仅主线程），Magenta 和 DIC 234s 已设为 false",
+          //     window.pdfjsLib.ColorConverter.getColorFilterConfig()
+          //   );
+          // }
+
+          // // 重新渲染油墨列表，显示初始CMYK数据和专色，此时会读取上面设置的过滤器状态
+          // this.pdfInkListViewer?.render();
+
+          // console.log(
+          //   "[测试] 请在油墨列表中点击任意油墨的眼睛图标以触发文档重新加载并应用过滤器"
+          // );
+
+          // 调试：检查 PDF 内容类型
+          if (this.pdfDocument) {
+            this.pdfDocument.getPage(1).then(page => {
+              page.getOperatorList().then(opList => {
+                console.log("[测试] 第一页的 operatorList:", opList);
+                console.log("[测试] 操作符数量:", opList.fnArray.length);
+                console.log(
+                  "[测试] 前10个操作符:",
+                  opList.fnArray.slice(0, 10)
+                );
+              });
+            });
+          }
 
           // For documents with different page sizes, once all pages are
           // resolved, ensure that the correct location becomes visible on load.
@@ -2106,10 +2167,17 @@ const PDFViewerApplication = {
   },
 
   forceRendering() {
+    console.log(`[app.js] forceRendering开始执行`);
+    console.log(
+      `[app.js] ColorConverter配置:`,
+      window.pdfjsLib?.ColorConverter?.getColorFilterConfig()
+    );
     this.pdfRenderingQueue.printing = !!this.printService;
     this.pdfRenderingQueue.isThumbnailViewEnabled =
       this.pdfSidebar?.visibleView === SidebarView.THUMBS;
+    console.log(`[app.js] 调用renderHighestPriority`);
     this.pdfRenderingQueue.renderHighestPriority();
+    console.log(`[app.js] forceRendering执行完成`);
   },
 
   beforePrint() {
@@ -2246,6 +2314,141 @@ const PDFViewerApplication = {
     );
     eventBus._on("print", this.triggerPrinting.bind(this), opts);
     eventBus._on("download", this.downloadOrSave.bind(this), opts);
+    eventBus._on(
+      "inkstatechanged",
+      async evt => {
+        console.log(
+          `[app.js] 收到inkstatechanged事件，油墨数量: ${evt.inks?.length}`
+        );
+
+        // 获取当前 ColorConverter 配置
+        const config = window.pdfjsLib?.ColorConverter?.getColorFilterConfig();
+        console.log(`[app.js] 当前ColorConverter配置:`, config);
+        console.log(
+          `[app.js] 配置详情 - enabled: ${config.enabled}, Cyan: ${config.colors?.Cyan}, Magenta: ${config.colors?.Magenta}`
+        );
+
+        // 方案A：重新加载文档
+        console.log(`[app.js] 方案A：重新加载文档`);
+        if (this.url && this.pdfLoadingTask) {
+          console.log(`[app.js] 当前文档URL: ${this.url}`);
+
+          // 保存当前页码和缩放
+          const currentPage = this.page;
+          const currentScale = this.pdfViewer.currentScale;
+          const currentScrollLeft = this.pdfViewer.container.scrollLeft;
+          const currentScrollTop = this.pdfViewer.container.scrollTop;
+
+          console.log(
+            `[app.js] 保存状态: page=${currentPage}, scale=${currentScale}, scroll=(${currentScrollLeft}, ${currentScrollTop})`
+          );
+
+          try {
+            // 重新打开文档
+            await this.open({ url: this.url });
+
+            console.log(`[app.js] 文档重新加载完成，立即同步配置到Worker线程`);
+
+            // 立即同步配置到Worker线程（在渲染之前）
+            if (this.pdfDocument && this.pdfDocument.updateColorFilterConfig) {
+              await this.pdfDocument.updateColorFilterConfig(config);
+              console.log(`[app.js] 配置已同步到Worker线程`);
+            } else {
+              console.warn(
+                `[app.js] pdfDocument或updateColorFilterConfig方法不存在`
+              );
+            }
+
+            // 清除所有页面的缓存（包括可能已经渲染的页面）
+            console.log(`[app.js] 开始清除所有缓存`);
+
+            // 清除共享对象缓存（字体、图像等）
+            if (this.pdfDocument && this.pdfDocument._transport) {
+              this.pdfDocument._transport.commonObjs.clear();
+              console.log(`[app.js] 已清除共享对象缓存（commonObjs）`);
+            }
+
+            const pagesToClear = this.pdfViewer._getVisiblePages();
+            for (const { view: pageView } of pagesToClear.views) {
+              if (pageView.pdfPage) {
+                // 清除 operatorList 缓存
+                if (pageView.pdfPage.clearOperatorListCache) {
+                  pageView.pdfPage.clearOperatorListCache();
+                  console.log(
+                    `[app.js] 已清除页面 ${pageView.id} 的operatorList缓存`
+                  );
+                }
+                // 清除对象缓存（包括图像）
+                if (pageView.pdfPage.objs) {
+                  pageView.pdfPage.objs.clear();
+                  console.log(
+                    `[app.js] 已清除页面 ${pageView.id} 的对象缓存（包括图像）`
+                  );
+                }
+              }
+              // 完全重置页面视图，这会触发重新渲染
+              pageView.reset();
+              console.log(`[app.js] 已重置页面 ${pageView.id} 的视图`);
+            }
+
+            // 强制重新渲染，此时会使用新的配置重新生成operatorList
+            this.forceRendering();
+
+            console.log(`[app.js] 缓存已清除，触发重新渲染`);
+
+            // 等待重新渲染完成
+            await new Promise(resolve => {
+              const checkRendering = () => {
+                const currentVisiblePages = this.pdfViewer._getVisiblePages();
+                const allFinished = currentVisiblePages.views.every(
+                  ({ view }) => view.renderingState === 3
+                );
+                if (allFinished) {
+                  resolve();
+                } else {
+                  setTimeout(checkRendering, 50);
+                }
+              };
+              setTimeout(checkRendering, 100);
+            });
+
+            console.log(`[app.js] 重新渲染完成`);
+
+            // 重置油墨清单的第一页渲染标记，并手动触发渲染
+            if (this.pdfInkListViewer) {
+              this.pdfInkListViewer._firstPageRendered = false;
+              // 等待一小段时间确保operatorList已更新
+              setTimeout(() => {
+                this.pdfInkListViewer.render();
+              }, 200);
+            }
+
+            // 恢复视图状态
+            setTimeout(() => {
+              if (currentPage) {
+                this.page = currentPage;
+              }
+              if (currentScale) {
+                this.pdfViewer.currentScale = currentScale;
+              }
+              // 恢复滚动位置
+              setTimeout(() => {
+                this.pdfViewer.container.scrollLeft = currentScrollLeft;
+                this.pdfViewer.container.scrollTop = currentScrollTop;
+                console.log(`[app.js] 状态恢复完成`);
+              }, 100);
+            }, 100);
+          } catch (error) {
+            console.error(`[app.js] 文档重新加载失败:`, error);
+          }
+        } else {
+          console.warn(
+            `[app.js] 无法重新加载文档，url=${this.url}, pdfLoadingTask=${!!this.pdfLoadingTask}`
+          );
+        }
+      },
+      opts
+    );
     eventBus._on("firstpage", () => (this.page = 1), opts);
     eventBus._on("lastpage", () => (this.page = this.pagesCount), opts);
     eventBus._on("nextpage", () => pdfViewer.nextPage(), opts);

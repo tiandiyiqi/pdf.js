@@ -826,6 +826,15 @@ class PDFDocumentProxy {
   }
 
   /**
+   * Update the color filter configuration in the Worker thread.
+   * @param {Object} config - The color filter configuration object.
+   * @returns {Promise<boolean>} A promise that resolves to true when the configuration is updated.
+   */
+  updateColorFilterConfig(config) {
+    return this._transport.updateColorFilterConfig(config);
+  }
+
+  /**
    * @param {RefProxy} ref - The page reference.
    * @returns {Promise<number>} A promise that is resolved with the page index,
    *   starting from zero, that is associated with the reference.
@@ -1828,6 +1837,23 @@ class PDFPageProxy {
   }
 
   /**
+   * Clears the operator list cache for all rendering intents.
+   * This forces the page to regenerate the operator list on next render.
+   */
+  clearOperatorListCache() {
+    for (const intentState of this._intentStates.values()) {
+      intentState.displayReadyCapability = null;
+      intentState.opListReadCapability = null;
+      intentState.operatorList = {
+        fnArray: [],
+        argsArray: [],
+        lastChunk: false,
+        separateAnnots: null,
+      };
+    }
+  }
+
+  /**
    * @private
    */
   _startRenderPage(transparency, cacheKey) {
@@ -2613,6 +2639,12 @@ class WorkerTransport {
     return this.destroyCapability.promise;
   }
 
+  updateColorFilterConfig(config) {
+    return this.messageHandler.sendWithPromise("UpdateColorFilterConfig", {
+      config,
+    });
+  }
+
   setupMessageHandler() {
     const { messageHandler, loadingTask } = this;
 
@@ -3128,12 +3160,36 @@ class WorkerTransport {
     }
     await this.messageHandler.sendWithPromise("Cleanup", null);
 
+    // Wait for all pages that are currently rendering to finish
+    const waitOn = [];
+    for (const page of this.#pageCache.values()) {
+      // Check if page is currently rendering
+      let isRendering = false;
+      for (const { renderTasks, operatorList } of page._intentStates.values()) {
+        if (renderTasks.size > 0 || !operatorList.lastChunk) {
+          isRendering = true;
+          // Wait for all render tasks to complete
+          for (const internalRenderTask of renderTasks) {
+            waitOn.push(internalRenderTask.completed || Promise.resolve());
+          }
+        }
+      }
+    }
+
+    // Wait for all rendering tasks to complete before cleanup
+    if (waitOn.length > 0) {
+      await Promise.all(waitOn);
+    }
+
+    // Now perform cleanup on all pages
     for (const page of this.#pageCache.values()) {
       const cleanupSuccessful = page.cleanup();
 
       if (!cleanupSuccessful) {
-        throw new Error(
-          `startCleanup: Page ${page.pageNumber} is currently rendering.`
+        // If cleanup still fails after waiting, it might be a new render task started
+        // In this case, we'll skip this page and continue with others
+        console.warn(
+          `startCleanup: Page ${page.pageNumber} cleanup failed, skipping.`
         );
       }
     }

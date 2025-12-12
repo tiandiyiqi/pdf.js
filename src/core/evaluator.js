@@ -2053,6 +2053,7 @@ class PartialEvaluator {
             break;
           case OPS.setFillCMYKColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.cmyk;
+            console.log("[tiandiyiqi] setFillCMYKColor operator called", args);
             args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
             fn = OPS.setFillRGBColor;
             break;
@@ -2386,13 +2387,8 @@ class PartialEvaluator {
         const spotColorsRGB = new Map();
         // 遍历localColorSpaceCache查找专色
         const allColorSpaces = localColorSpaceCache.getAll();
-        console.log(
-          `[专色调试] localColorSpaceCache.getAll() 返回的颜色空间数量: ${allColorSpaces.length}`
-        );
+
         for (const colorSpace of allColorSpaces) {
-          console.log(
-            `[专色调试] 检查颜色空间: name=${colorSpace?.name}, channelNames=${colorSpace?.channelNames}`
-          );
           if (
             colorSpace &&
             colorSpace.name === "Alternate" &&
@@ -2409,9 +2405,6 @@ class PartialEvaluator {
             ) {
               // 使用C1值（tint=1时的颜色）作为专色的代表颜色
               const c1Color = colorSpace.tintFn.c1;
-              console.log(
-                `[专色调试] evaluator中基础颜色空间: ${colorSpace.base?.name}, C1值: ${c1Color}`
-              );
 
               // 根据基础颜色空间处理C1值
               if (
@@ -2423,9 +2416,6 @@ class PartialEvaluator {
                 const m = c1Color[1];
                 const y = c1Color[2];
                 const k = c1Color[3];
-                console.log(
-                  `[专色调试] evaluator中CMYK值: ${c}, ${m}, ${y}, ${k}`
-                );
 
                 // 使用与DeviceCmykCS.#toRgb完全相同的多项式回归算法
                 // 系数来自CMYK US Web Coated (SWOP) 色彩空间的采样RGB颜色表
@@ -2500,9 +2490,6 @@ class PartialEvaluator {
                   b,
                   hex: `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`,
                 };
-                console.log(
-                  `[专色调试] evaluator中CMYK转换为RGB: ${spotColorRGB.hex} (RGB: ${r}, ${g}, ${b})`
-                );
               } else if (c1Color.length >= 3) {
                 // 假设是RGB值，转换为十六进制颜色码
                 const r = Math.round(c1Color[0] * 255);
@@ -2514,9 +2501,6 @@ class PartialEvaluator {
                   b,
                   hex: `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`,
                 };
-                console.log(
-                  `[专色调试] evaluator中直接使用RGB值: ${spotColorRGB.hex} (RGB: ${r}, ${g}, ${b})`
-                );
               }
             }
 
@@ -2533,9 +2517,6 @@ class PartialEvaluator {
         // 将专色信息添加到operatorList
         operatorList.spotColors = spotColors;
         operatorList.spotColorsRGB = spotColorsRGB;
-        console.log(
-          `[专色调试] 收集到的专色信息: spotColors=${Array.from(spotColors)}, spotColorsRGB=${JSON.stringify(Object.fromEntries(spotColorsRGB))}`
-        );
       } catch (e) {
         warn(`Evaluator.getOperatorList: 收集专色时出错: ${e}`);
       }

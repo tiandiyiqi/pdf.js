@@ -141,6 +141,23 @@ class ColorSpaceUtils {
           return this.rgba;
         case "CMYK":
         case "DeviceCMYK":
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                location: "colorspace_utils.js:143",
+                message: "DeviceCMYK colorspace accessed",
+                data: { csName: cs.name },
+                timestamp: Date.now(),
+                sessionId: "debug-session",
+                hypothesisId: "C",
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
           return this.cmyk;
         case "Pattern":
           return new PatternCS(/* baseCS = */ null);

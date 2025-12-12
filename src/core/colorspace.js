@@ -372,9 +372,6 @@ class AlternateCS extends ColorSpace {
       if (tintFn && tintFn.functionType === "interpolated" && tintFn.c1) {
         // 使用C1值（tint=1时的颜色）作为专色的代表颜色
         const c1Color = tintFn.c1;
-        console.log(
-          `[专色调试] 基础颜色空间: ${this.base.name}, C1值: ${c1Color}`
-        );
 
         // 根据基础颜色空间处理C1值
         if (this.base.name === "DeviceCMYK" && c1Color.length >= 4) {
@@ -383,59 +380,90 @@ class AlternateCS extends ColorSpace {
           const m = c1Color[1];
           const y = c1Color[2];
           const k = c1Color[3];
-          console.log(`[专色调试] CMYK值: ${c}, ${m}, ${y}, ${k}`);
-          
+
           // 使用与DeviceCmykCS.#toRgb完全相同的多项式回归算法
           let r, g, b;
-          
+
           // 应用与DeviceCmykCS.#toRgb相同的算法
-          r = 255 +
-            c * (-4.387332384609988 * c + 54.48615194189176 * m + 18.82290502165302 * y + 212.25662451639585 * k + -285.2331026137004) +
-            m * (1.7149763477362134 * m - 5.6096736904047315 * y - 17.873870861415444 * k - 5.497006427196366) +
-            y * (-2.5217340131683033 * y - 21.248923337353073 * k + 17.5119270841813) +
+          r =
+            255 +
+            c *
+              (-4.387332384609988 * c +
+                54.48615194189176 * m +
+                18.82290502165302 * y +
+                212.25662451639585 * k +
+                -285.2331026137004) +
+            m *
+              (1.7149763477362134 * m -
+                5.6096736904047315 * y -
+                17.873870861415444 * k -
+                5.497006427196366) +
+            y *
+              (-2.5217340131683033 * y -
+                21.248923337353073 * k +
+                17.5119270841813) +
             k * (-21.86122147463605 * k - 189.48180835922747);
-          
-          g = 255 +
-            c * (8.841041422036149 * c + 60.118027045597366 * m + 6.871425592049007 * y + 31.159100130055922 * k + -79.2970844816548) +
-            m * (-15.310361306967817 * m + 17.575251261109482 * y + 131.35250912493976 * k - 190.9453302588951) +
-            y * (4.444339102852739 * y + 9.8632861493405 * k - 24.86741582555878) +
+
+          g =
+            255 +
+            c *
+              (8.841041422036149 * c +
+                60.118027045597366 * m +
+                6.871425592049007 * y +
+                31.159100130055922 * k +
+                -79.2970844816548) +
+            m *
+              (-15.310361306967817 * m +
+                17.575251261109482 * y +
+                131.35250912493976 * k -
+                190.9453302588951) +
+            y *
+              (4.444339102852739 * y +
+                9.8632861493405 * k -
+                24.86741582555878) +
             k * (-20.737325471181034 * k - 187.80453709719578);
-          
-          b = 255 +
-            c * (0.8842522430003296 * c + 8.078677503112928 * m + 30.89978309703729 * y - 0.23883238689178934 * k + -14.183576799673286) +
-            m * (10.49593273432072 * m + 63.02378494754052 * y + 50.606957656360734 * k - 112.23884253719248) +
-            y * (0.03296041114873217 * y + 115.60384449646641 * k + -193.58209356861505) +
+
+          b =
+            255 +
+            c *
+              (0.8842522430003296 * c +
+                8.078677503112928 * m +
+                30.89978309703729 * y -
+                0.23883238689178934 * k +
+                -14.183576799673286) +
+            m *
+              (10.49593273432072 * m +
+                63.02378494754052 * y +
+                50.606957656360734 * k -
+                112.23884253719248) +
+            y *
+              (0.03296041114873217 * y +
+                115.60384449646641 * k +
+                -193.58209356861505) +
             k * (-22.33816807309886 * k - 180.12613974708367);
-          
+
           // 确保RGB值在0-255范围内
           r = Math.round(Math.max(0, Math.min(255, r)));
           g = Math.round(Math.max(0, Math.min(255, g)));
           b = Math.round(Math.max(0, Math.min(255, b)));
-          
+
           spotColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-          console.log(`[专色调试] CMYK转换为RGB: ${spotColor} (RGB: ${r}, ${g}, ${b})`);
         } else if (c1Color.length >= 3) {
           // 假设是RGB值，转换为十六进制颜色码
           const r = Math.round(c1Color[0] * 255);
           const g = Math.round(c1Color[1] * 255);
           const b = Math.round(c1Color[2] * 255);
           spotColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-          console.log(
-            `[专色调试] 直接使用RGB值: ${spotColor} (RGB: ${r}, ${g}, ${b})`
-          );
         }
       }
 
       // 添加专色到ColorConverter
       spotNames.forEach(spotName => {
-        console.log(
-          `[专色调试] 添加专色到ColorConverter: ${spotName}, 颜色: ${spotColor}`
-        );
         ColorConverter.addSpotColor(spotName, true, spotColor);
       });
     }
   }
-
+  //专色的颜色转换为RGB
   getRgbItem(src, srcOffset, dest, destOffset) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -443,11 +471,56 @@ class AlternateCS extends ColorSpace {
         'AlternateCS.getRgbItem: Unsupported "dest" type.'
       );
     }
+
+    // 检查专色可见性（二元过滤：全有或全无）
+    const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
+    if (this.channelNames && this.channelNames.length > 0) {
+      // 检查是否有专色通道（非CMYK通道）
+      const spotChannels = this.channelNames.filter(
+        name => !cmykNames.includes(name)
+      );
+
+      if (spotChannels.length > 0) {
+        // 对于单通道专色（Separation），检查第一个通道
+        // 对于多通道（DeviceN），检查所有专色通道
+        let shouldShow = true;
+        for (let i = 0; i < this.channelNames.length; i++) {
+          const channelName = this.channelNames[i];
+          if (!cmykNames.includes(channelName)) {
+            // 这是专色通道
+            const spotValue = src[srcOffset + i];
+            // 如果专色值 > 0，检查可见性
+            if (spotValue > 0) {
+              const filteredValue = ColorConverter.filterSpot(
+                channelName,
+                spotValue
+              );
+              if (filteredValue === 0) {
+                // 专色不可见，返回白色
+                shouldShow = false;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!shouldShow) {
+          // 专色不可见，直接返回白色RGB
+          dest[destOffset] = 255;
+          dest[destOffset + 1] = 255;
+          dest[destOffset + 2] = 255;
+          return;
+        }
+      }
+    }
+
+    // 专色可见或没有专色，继续原有的转换流程
     const tmpBuf = this.tmpBuf;
     this.tintFn(src, srcOffset, tmpBuf, 0);
-    this.base.getRgbItem(tmpBuf, 0, dest, destOffset);
+    this.base.getRgbItem(tmpBuf, 0, dest, destOffset, true); // skipFilter = true，跳过颜色过滤
   }
 
+  //批量专色的颜色转换为RGB
   getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -468,14 +541,73 @@ class AlternateCS extends ColorSpace {
       : new Uint8ClampedArray(baseNumComps * count);
     const numComps = this.numComps;
 
+    // 检查是否有专色通道（用于二元过滤）
+    const cmykNames = ["Cyan", "Magenta", "Yellow", "Black"];
+    const hasSpotColors =
+      this.channelNames &&
+      this.channelNames.length > 0 &&
+      this.channelNames.some(name => !cmykNames.includes(name));
+
     const scaled = new Float32Array(numComps);
     const tinted = new Float32Array(baseNumComps);
     let i, j;
+    let currentSrcOffset = srcOffset; // 保存当前源数据偏移量
 
     for (i = 0; i < count; i++) {
+      // 读取当前像素的所有分量
       for (j = 0; j < numComps; j++) {
-        scaled[j] = src[srcOffset++] * scale;
+        scaled[j] = src[currentSrcOffset + j] * scale;
       }
+
+      // 检查专色可见性（二元过滤：全有或全无）
+      let shouldShow = true;
+      if (hasSpotColors) {
+        for (j = 0; j < this.channelNames.length; j++) {
+          const channelName = this.channelNames[j];
+          if (!cmykNames.includes(channelName)) {
+            // 这是专色通道
+            const spotValue = scaled[j]; // 已经经过scale转换
+            // 如果专色值 > 0，检查可见性
+            if (spotValue > 0) {
+              const filteredValue = ColorConverter.filterSpot(
+                channelName,
+                spotValue
+              );
+              if (filteredValue === 0) {
+                // 专色不可见，填充白色
+                shouldShow = false;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!shouldShow) {
+        // 专色不可见，直接填充白色RGB
+        if (isPassthrough) {
+          // 直接写入dest
+          dest[destOffset + i * (3 + alpha01)] = 255;
+          dest[destOffset + i * (3 + alpha01) + 1] = 255;
+          dest[destOffset + i * (3 + alpha01) + 2] = 255;
+          if (alpha01 === 1) {
+            dest[destOffset + i * (3 + alpha01) + 3] = 255;
+          }
+        } else {
+          // 写入baseBuf（后续会通过base.getRgbBuffer转换）
+          // 对于白色，baseBuf应该是[255, 255, 255]（如果base是RGB）
+          // 但这里base可能是CMYK，所以我们需要填充白色对应的base颜色空间值
+          // 最简单的方法是填充0（对于CMYK，白色是[0,0,0,0]）
+          for (j = 0; j < baseNumComps; j++) {
+            baseBuf[pos + j] = 0;
+          }
+          pos += baseNumComps;
+        }
+        currentSrcOffset += numComps; // 移动到下一个像素
+        continue;
+      }
+
+      // 专色可见或没有专色，继续原有的转换流程
       tintFn(scaled, 0, tinted, 0);
       if (usesZeroToOneRange) {
         for (j = 0; j < baseNumComps; j++) {
@@ -485,6 +617,7 @@ class AlternateCS extends ColorSpace {
         base.getRgbItem(tinted, 0, baseBuf, pos);
         pos += baseNumComps;
       }
+      currentSrcOffset += numComps; // 移动到下一个像素
     }
 
     if (!isPassthrough) {
@@ -744,18 +877,53 @@ class DeviceCmykCS extends ColorSpace {
   // from CMYK US Web Coated (SWOP) colorspace, and f_i is the corresponding
   // CMYK color conversion using the estimation below:
   //   f(A, B,.. N) = Acc+Bcm+Ccy+Dck+c+Fmm+Gmy+Hmk+Im+Jyy+Kyk+Ly+Mkk+Nk+255
-  #toRgb(src, srcOffset, srcScale, dest, destOffset) {
+  #toRgb(src, srcOffset, srcScale, dest, destOffset, skipFilter = false) {
     let c = src[srcOffset] * srcScale;
     let m = src[srcOffset + 1] * srcScale;
     let y = src[srcOffset + 2] * srcScale;
     let k = src[srcOffset + 3] * srcScale;
 
-    // Apply color filter
-    const filteredCMYK = ColorConverter.filterCMYK([c, m, y, k]);
-    c = filteredCMYK[0];
-    m = filteredCMYK[1];
-    y = filteredCMYK[2];
-    k = filteredCMYK[3];
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "colorspace.js:780",
+        message: "DeviceCmykCS.#toRgb called",
+        data: { c, m, y, k, isWorker: typeof window === "undefined" },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        hypothesisId: "B",
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    // Apply color filter (unless skipFilter is true)
+    if (!skipFilter) {
+      const filteredCMYK = ColorConverter.filterCMYK([c, m, y, k]);
+
+      // #region agent log
+      fetch(
+        "http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "colorspace.js:790",
+            message: "After filterCMYK",
+            data: { filtered: filteredCMYK, original: [c, m, y, k] },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            hypothesisId: "B",
+          }),
+        }
+      ).catch(() => {});
+      // #endregion
+      c = filteredCMYK[0];
+      m = filteredCMYK[1];
+      y = filteredCMYK[2];
+      k = filteredCMYK[3];
+    }
 
     dest[destOffset] =
       255 +
@@ -810,14 +978,15 @@ class DeviceCmykCS extends ColorSpace {
       k * (-22.33816807309886 * k - 180.12613974708367);
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, skipFilter = false) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
         'DeviceCmykCS.getRgbItem: Unsupported "dest" type.'
       );
     }
-    this.#toRgb(src, srcOffset, 1, dest, destOffset);
+
+    this.#toRgb(src, srcOffset, 1, dest, destOffset, skipFilter);
   }
 
   getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01) {
@@ -828,6 +997,7 @@ class DeviceCmykCS extends ColorSpace {
       );
     }
     const scale = 1 / ((1 << bits) - 1);
+
     for (let i = 0; i < count; i++) {
       this.#toRgb(src, srcOffset, scale, dest, destOffset);
       srcOffset += 4;

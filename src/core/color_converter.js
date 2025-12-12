@@ -26,6 +26,18 @@ class ColorConverter {
     overprint: false, // 叠印预览开关
   };
 
+  // 初始化日志
+  static {
+    const stack = new Error().stack;
+    const location = typeof window !== "undefined" ? "主线程" : "Worker线程";
+    console.log(`[ColorConverter] 类初始化完成（${location}），初始配置:`, {
+      enabled: this.#colorFilterConfig.enabled,
+      overprint: this.#colorFilterConfig.overprint,
+      colors: Object.fromEntries(this.#colorFilterConfig.colors),
+    });
+    console.log(`[ColorConverter] 初始化调用栈:`, stack);
+  }
+
   // 事件监听器
   static #eventListeners = new Map();
 
@@ -39,6 +51,21 @@ class ColorConverter {
 
   // 配置管理方法
   static setColorFilterConfig(config) {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "color_converter.js:52",
+        message: "setColorFilterConfig called",
+        data: { config, isWorker: typeof window === "undefined" },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        hypothesisId: "A,E",
+      }),
+    }).catch(() => {});
+    // #endregion
+
     if (config?.enabled !== undefined) {
       this.#colorFilterConfig.enabled = !!config.enabled;
     }
@@ -48,6 +75,21 @@ class ColorConverter {
     if (config?.overprint !== undefined) {
       this.#colorFilterConfig.overprint = !!config.overprint;
     }
+
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "color_converter.js:62",
+        message: "setColorFilterConfig complete",
+        data: { finalConfig: this.getColorFilterConfig() },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        hypothesisId: "A",
+      }),
+    }).catch(() => {});
+    // #endregion
   }
 
   static getColorFilterConfig() {
@@ -61,16 +103,25 @@ class ColorConverter {
 
   static updateColorState(colorName, visible) {
     if (typeof colorName === "string") {
+      console.log(
+        `[ColorConverter] updateColorState: ${colorName} -> ${visible}`
+      );
       this.#colorFilterConfig.colors.set(colorName, !!visible);
+      console.log(
+        `[ColorConverter] 更新后的配置:`,
+        this.getColorFilterConfig()
+      );
     }
   }
 
   static addSpotColor(spotName, visible = true, color = null) {
     if (typeof spotName === "string") {
       const wasPresent = this.#colorFilterConfig.colors.has(spotName);
-      this.#colorFilterConfig.colors.set(spotName, !!visible);
 
+      // 只有当专色不存在时才设置，避免覆盖用户已经设置的状态
       if (!wasPresent) {
+        this.#colorFilterConfig.colors.set(spotName, !!visible);
+
         // 触发专色添加事件，包含颜色信息
         this.#triggerEvent("spotColorAdded", {
           name: spotName,
@@ -132,25 +183,55 @@ class ColorConverter {
   }
 
   // 过滤逻辑
+  /**
+   * 过滤CMYK颜色值，根据当前颜色过滤器配置隐藏/显示特定颜色通道
+   * @param {number[]} cmyk - 输入的CMYK颜色值数组，顺序为[C, M, Y, K]
+   * @returns {number[]} 过滤后的CMYK颜色值数组
+   */
   static filterCMYK(cmyk) {
+    // #region agent log
+    // 调试日志：记录方法调用时的输入参数和配置状态
+    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "color_converter.js:155",
+        message: "filterCMYK entry",
+        data: {
+          cmyk,
+          enabled: this.#colorFilterConfig.enabled,
+          colors: Object.fromEntries(this.#colorFilterConfig.colors),
+          isWorker: typeof window === "undefined",
+        },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        hypothesisId: "A,B",
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    // 如果过滤器未启用，直接返回原始CMYK值
     if (!this.#colorFilterConfig.enabled) {
       return [...cmyk];
     }
 
+    // 创建CMYK数组的副本用于过滤操作
     const filtered = [...cmyk];
     const colors = this.#colorFilterConfig.colors;
 
+    // 根据配置逐个检查颜色通道是否应该显示
+    // 如果颜色通道被禁用(visible=false)，则将该通道值设为0
     if (!colors.get("Cyan")) {
-      filtered[0] = 0;
+      filtered[0] = 0; // 青色通道
     }
     if (!colors.get("Magenta")) {
-      filtered[1] = 0;
+      filtered[1] = 0; // 品红色通道
     }
     if (!colors.get("Yellow")) {
-      filtered[2] = 0;
+      filtered[2] = 0; // 黄色通道
     }
     if (!colors.get("Black")) {
-      filtered[3] = 0;
+      filtered[3] = 0; // 黑色通道
     }
 
     return filtered;
@@ -158,16 +239,27 @@ class ColorConverter {
 
   static filterSpot(spotName, spotValue) {
     if (!this.#colorFilterConfig.enabled) {
+      console.log(
+        `[ColorConverter] filterSpot: 过滤器未启用，返回原始值 ${spotName}=${spotValue}`
+      );
       return spotValue;
     }
 
     const shouldShow = this.#colorFilterConfig.colors.get(spotName);
-    return shouldShow === false ? 0 : spotValue;
+    const result = shouldShow === false ? 0 : spotValue;
+    console.log(
+      `[ColorConverter] filterSpot: ${spotName} -> ${spotValue} (shouldShow=${shouldShow}) -> ${result}`
+    );
+    return result;
   }
 
   // 带过滤器的转换方法
   static cmykToRgbWithFilter(cmyk) {
-    return this.cmykToRgb(this.filterCMYK(cmyk));
+    console.log(`[ColorConverter] cmykToRgbWithFilter 被调用，输入CMYK:`, cmyk);
+    const filtered = this.filterCMYK(cmyk);
+    const rgb = this.cmykToRgb(filtered);
+    console.log(`[ColorConverter] cmykToRgbWithFilter 输出RGB:`, rgb);
+    return rgb;
   }
 
   static deviceNToRgbWithFilter(channels) {
@@ -225,28 +317,62 @@ class ColorConverter {
 
       return [Math.round(r), Math.round(g), Math.round(b)];
     }
-    
+
     // 普通模式：使用多项式回归算法，与DeviceCmykCS.#toRgb完全相同
     let r, g, b;
-    
-    r = 255 +
-      c * (-4.387332384609988 * c + 54.48615194189176 * m + 18.82290502165302 * y + 212.25662451639585 * k + -285.2331026137004) +
-      m * (1.7149763477362134 * m - 5.6096736904047315 * y - 17.873870861415444 * k - 5.497006427196366) +
-      y * (-2.5217340131683033 * y - 21.248923337353073 * k + 17.5119270841813) +
+
+    r =
+      255 +
+      c *
+        (-4.387332384609988 * c +
+          54.48615194189176 * m +
+          18.82290502165302 * y +
+          212.25662451639585 * k +
+          -285.2331026137004) +
+      m *
+        (1.7149763477362134 * m -
+          5.6096736904047315 * y -
+          17.873870861415444 * k -
+          5.497006427196366) +
+      y *
+        (-2.5217340131683033 * y - 21.248923337353073 * k + 17.5119270841813) +
       k * (-21.86122147463605 * k - 189.48180835922747);
-    
-    g = 255 +
-      c * (8.841041422036149 * c + 60.118027045597366 * m + 6.871425592049007 * y + 31.159100130055922 * k + -79.2970844816548) +
-      m * (-15.310361306967817 * m + 17.575251261109482 * y + 131.35250912493976 * k - 190.9453302588951) +
+
+    g =
+      255 +
+      c *
+        (8.841041422036149 * c +
+          60.118027045597366 * m +
+          6.871425592049007 * y +
+          31.159100130055922 * k +
+          -79.2970844816548) +
+      m *
+        (-15.310361306967817 * m +
+          17.575251261109482 * y +
+          131.35250912493976 * k -
+          190.9453302588951) +
       y * (4.444339102852739 * y + 9.8632861493405 * k - 24.86741582555878) +
       k * (-20.737325471181034 * k - 187.80453709719578);
-    
-    b = 255 +
-      c * (0.8842522430003296 * c + 8.078677503112928 * m + 30.89978309703729 * y - 0.23883238689178934 * k + -14.183576799673286) +
-      m * (10.49593273432072 * m + 63.02378494754052 * y + 50.606957656360734 * k - 112.23884253719248) +
-      y * (0.03296041114873217 * y + 115.60384449646641 * k + -193.58209356861505) +
+
+    b =
+      255 +
+      c *
+        (0.8842522430003296 * c +
+          8.078677503112928 * m +
+          30.89978309703729 * y -
+          0.23883238689178934 * k +
+          -14.183576799673286) +
+      m *
+        (10.49593273432072 * m +
+          63.02378494754052 * y +
+          50.606957656360734 * k -
+          112.23884253719248) +
+      y *
+        (0.03296041114873217 * y +
+          115.60384449646641 * k +
+          -193.58209356861505) +
       k * (-22.33816807309886 * k - 180.12613974708367);
-    
+
     // 确保RGB值在0-255范围内
     r = Math.round(Math.max(0, Math.min(255, r)));
     g = Math.round(Math.max(0, Math.min(255, g)));
