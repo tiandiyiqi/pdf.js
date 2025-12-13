@@ -190,6 +190,7 @@ class PDFPageView extends BasePDFPageView {
     this.pdfPageRotate = defaultViewport.rotation;
     this._optionalContentConfigPromise =
       options.optionalContentConfigPromise || null;
+    this._colorFilterConfigPromise = null;
     this.#textLayerMode = options.textLayerMode ?? TextLayerMode.ENABLE;
     this.#annotationMode =
       options.annotationMode ?? AnnotationMode.ENABLE_FORMS;
@@ -677,6 +678,7 @@ class PDFPageView extends BasePDFPageView {
     scale = 0,
     rotation = null,
     optionalContentConfigPromise = null,
+    colorFilterConfigPromise = null,
     drawingDelay = -1,
   }) {
     this.scale = scale || this.scale;
@@ -697,6 +699,43 @@ class PDFPageView extends BasePDFPageView {
         this.#useThumbnailCanvas.initialOptionalContent =
           optionalContentConfig.hasInitialVisibility;
       });
+    }
+    if (colorFilterConfigPromise instanceof Promise) {
+      const previousPromise = this._colorFilterConfigPromise;
+      this._colorFilterConfigPromise = colorFilterConfigPromise;
+
+      console.log(
+        `[PDFPageView] 页面${this.id} update: colorFilterConfigPromise变化`,
+        `previousPromise:`,
+        previousPromise,
+        `newPromise:`,
+        colorFilterConfigPromise,
+        `pdfPage存在:`,
+        !!this.pdfPage,
+        `renderingState:`,
+        this.renderingState
+      );
+
+      // 如果颜色过滤器配置发生变化，且页面已经初始化（有pdfPage），需要重置并重新渲染
+      if (previousPromise !== colorFilterConfigPromise && this.pdfPage) {
+        console.log(
+          `[PDFPageView] 页面${this.id} 清除operatorList缓存并触发重新渲染`
+        );
+
+        // 清除 operatorList 缓存（关键！）
+        this.pdfPage.cleanup();
+
+        // 重置页面状态，触发重新渲染
+        // 保持注释层和文本层，只重置画布
+        this.reset({
+          keepAnnotationLayer: true,
+          keepTextLayer: true,
+        });
+        console.log(
+          `[PDFPageView] 页面${this.id} reset()完成，renderingState:`,
+          this.renderingState
+        );
+      }
     }
     this.#useThumbnailCanvas.directDrawing = true;
 
@@ -943,6 +982,7 @@ class PDFPageView extends BasePDFPageView {
       viewport: this.viewport,
       annotationMode: this.#annotationMode,
       optionalContentConfigPromise: this._optionalContentConfigPromise,
+      colorFilterConfigPromise: this._colorFilterConfigPromise,
       annotationCanvasMap: this._annotationCanvasMap,
       pageColors: this.pageColors,
       isEditing: this.#isEditing,

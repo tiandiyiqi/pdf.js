@@ -871,6 +871,7 @@ class WorkerMessageHandler {
             cacheKey: data.cacheKey,
             annotationStorage: data.annotationStorage,
             modifiedIds: data.modifiedIds,
+            colorFilterConfig: data.colorFilterConfig,
           })
           .then(
             function (operatorListInfo) {

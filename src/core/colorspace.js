@@ -136,13 +136,23 @@ class ColorSpace {
    * located in the src array starting from the srcOffset. Returns the array
    * of the rgb components, each value ranging from [0,255].
    */
-  getRgb(src, srcOffset, output = new Uint8ClampedArray(3)) {
-    this.getRgbItem(src, srcOffset, output, 0);
+  getRgb(
+    src,
+    srcOffset,
+    output = new Uint8ClampedArray(3),
+    colorFilterConfig = null
+  ) {
+    this.getRgbItem(src, srcOffset, output, 0, colorFilterConfig);
     return output;
   }
 
-  getRgbHex(src, srcOffset) {
-    const buffer = this.getRgb(src, srcOffset, ColorSpace.#rgbBuf);
+  getRgbHex(src, srcOffset, colorFilterConfig = null) {
+    const buffer = this.getRgb(
+      src,
+      srcOffset,
+      ColorSpace.#rgbBuf,
+      colorFilterConfig
+    );
     return Util.makeHexColor(buffer[0], buffer[1], buffer[2]);
   }
 
@@ -150,7 +160,7 @@ class ColorSpace {
    * Converts the color value to the RGB color, similar to the getRgb method.
    * The result placed into the dest array starting from the destOffset.
    */
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     unreachable("Should not call ColorSpace.getRgbItem");
   }
 
@@ -465,7 +475,14 @@ class AlternateCS extends ColorSpace {
   }
 
   // 专色的颜色转换为RGB
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
+    console.log(
+      `[AlternateCS.getRgbItem] 调用，colorFilterConfig:`,
+      !!colorFilterConfig,
+      `通道:`,
+      this.channelNames
+    );
+
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -492,10 +509,9 @@ class AlternateCS extends ColorSpace {
             const spotValue = src[srcOffset + i];
             // 如果专色值 > 0，检查可见性
             if (spotValue > 0) {
-              const filteredValue = ColorConverter.filterSpot(
-                channelName,
-                spotValue
-              );
+              const filteredValue = colorFilterConfig
+                ? colorFilterConfig.filterSpot(channelName, spotValue)
+                : ColorConverter.filterSpot(channelName, spotValue);
               if (filteredValue === 0) {
                 // 专色不可见，返回白色
                 shouldShow = false;
@@ -518,11 +534,20 @@ class AlternateCS extends ColorSpace {
     // 专色可见或没有专色，继续原有的转换流程
     const tmpBuf = this.tmpBuf;
     this.tintFn(src, srcOffset, tmpBuf, 0);
-    this.base.getRgbItem(tmpBuf, 0, dest, destOffset, true); // skipFilter = true，跳过颜色过滤
+    this.base.getRgbItem(tmpBuf, 0, dest, destOffset, true, colorFilterConfig); // skipFilter = true，跳过颜色过滤，但传递colorFilterConfig
   }
 
   // 批量专色的颜色转换为RGB
-  getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01) {
+  getRgbBuffer(
+    src,
+    srcOffset,
+    count,
+    dest,
+    destOffset,
+    bits,
+    alpha01,
+    colorFilterConfig = null
+  ) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -570,10 +595,9 @@ class AlternateCS extends ColorSpace {
             const spotValue = scaled[j]; // 已经经过scale转换
             // 如果专色值 > 0，检查可见性
             if (spotValue > 0) {
-              const filteredValue = ColorConverter.filterSpot(
-                channelName,
-                spotValue
-              );
+              const filteredValue = colorFilterConfig
+                ? colorFilterConfig.filterSpot(channelName, spotValue)
+                : ColorConverter.filterSpot(channelName, spotValue);
               if (filteredValue === 0) {
                 // 专色不可见，填充白色
                 shouldShow = false;
@@ -615,14 +639,23 @@ class AlternateCS extends ColorSpace {
           baseBuf[pos++] = tinted[j] * 255;
         }
       } else {
-        base.getRgbItem(tinted, 0, baseBuf, pos);
+        base.getRgbItem(tinted, 0, baseBuf, pos, true, colorFilterConfig);
         pos += baseNumComps;
       }
       currentSrcOffset += numComps; // 移动到下一个像素
     }
 
     if (!isPassthrough) {
-      base.getRgbBuffer(baseBuf, 0, count, dest, destOffset, 8, alpha01);
+      base.getRgbBuffer(
+        baseBuf,
+        0,
+        count,
+        dest,
+        destOffset,
+        8,
+        alpha01,
+        colorFilterConfig
+      );
     }
   }
 
@@ -729,7 +762,7 @@ class DeviceGrayCS extends ColorSpace {
     super("DeviceGray", 1);
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -772,7 +805,7 @@ class DeviceRgbCS extends ColorSpace {
     super("DeviceRGB", 3);
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -878,7 +911,15 @@ class DeviceCmykCS extends ColorSpace {
   // from CMYK US Web Coated (SWOP) colorspace, and f_i is the corresponding
   // CMYK color conversion using the estimation below:
   //   f(A, B,.. N) = Acc+Bcm+Ccy+Dck+c+Fmm+Gmy+Hmk+Im+Jyy+Kyk+Ly+Mkk+Nk+255
-  #toRgb(src, srcOffset, srcScale, dest, destOffset, skipFilter = false) {
+  #toRgb(
+    src,
+    srcOffset,
+    srcScale,
+    dest,
+    destOffset,
+    skipFilter = false,
+    colorFilterConfig = null
+  ) {
     let c = src[srcOffset] * srcScale;
     let m = src[srcOffset + 1] * srcScale;
     let y = src[srcOffset + 2] * srcScale;
@@ -901,7 +942,9 @@ class DeviceCmykCS extends ColorSpace {
 
     // Apply color filter (unless skipFilter is true)
     if (!skipFilter) {
-      const filteredCMYK = ColorConverter.filterCMYK([c, m, y, k]);
+      const filteredCMYK = colorFilterConfig
+        ? colorFilterConfig.filterCMYK([c, m, y, k])
+        : ColorConverter.filterCMYK([c, m, y, k]);
 
       // #region agent log
       fetch(
@@ -979,7 +1022,14 @@ class DeviceCmykCS extends ColorSpace {
       k * (-22.33816807309886 * k - 180.12613974708367);
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset, skipFilter = false) {
+  getRgbItem(
+    src,
+    srcOffset,
+    dest,
+    destOffset,
+    skipFilter = false,
+    colorFilterConfig = null
+  ) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -987,10 +1037,27 @@ class DeviceCmykCS extends ColorSpace {
       );
     }
 
-    this.#toRgb(src, srcOffset, 1, dest, destOffset, skipFilter);
+    this.#toRgb(
+      src,
+      srcOffset,
+      1,
+      dest,
+      destOffset,
+      skipFilter,
+      colorFilterConfig
+    );
   }
 
-  getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01) {
+  getRgbBuffer(
+    src,
+    srcOffset,
+    count,
+    dest,
+    destOffset,
+    bits,
+    alpha01,
+    colorFilterConfig = null
+  ) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -1000,7 +1067,15 @@ class DeviceCmykCS extends ColorSpace {
     const scale = 1 / ((1 << bits) - 1);
 
     for (let i = 0; i < count; i++) {
-      this.#toRgb(src, srcOffset, scale, dest, destOffset);
+      this.#toRgb(
+        src,
+        srcOffset,
+        scale,
+        dest,
+        destOffset,
+        false,
+        colorFilterConfig
+      );
       srcOffset += 4;
       destOffset += 3 + alpha01;
     }
@@ -1074,7 +1149,7 @@ class CalGrayCS extends ColorSpace {
     dest[destOffset + 2] = val;
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -1370,7 +1445,7 @@ class CalRGBCS extends ColorSpace {
     dest[destOffset + 2] = this.#sRGBTransferFunction(SRGB[2]) * 255;
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,
@@ -1513,7 +1588,7 @@ class LabCS extends ColorSpace {
     dest[destOffset + 2] = Math.sqrt(b) * 255;
   }
 
-  getRgbItem(src, srcOffset, dest, destOffset) {
+  getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,

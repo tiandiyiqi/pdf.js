@@ -464,7 +464,8 @@ class PartialEvaluator {
     task,
     initialState,
     localColorSpaceCache,
-    seenRefs
+    seenRefs,
+    colorFilterConfig = null
   ) {
     const { dict } = xobj;
     const matrix = lookupMatrix(dict.getArray("Matrix"), null);
@@ -508,7 +509,11 @@ class PartialEvaluator {
 
       if (smask?.backdrop) {
         colorSpace ||= ColorSpaceUtils.rgb;
-        smask.backdrop = colorSpace.getRgbHex(smask.backdrop, 0);
+        smask.backdrop = colorSpace.getRgbHex(
+          smask.backdrop,
+          0,
+          colorFilterConfig
+        );
       }
 
       operatorList.addOp(OPS.beginGroup, [groupOptions]);
@@ -531,6 +536,7 @@ class PartialEvaluator {
       operatorList,
       initialState,
       prevRefs: seenRefs,
+      colorFilterConfig,
     });
     operatorList.addOp(OPS.paintFormXObjectEnd, []);
 
@@ -856,7 +862,8 @@ class PartialEvaluator {
     task,
     stateManager,
     localColorSpaceCache,
-    seenRefs
+    seenRefs,
+    colorFilterConfig = null
   ) {
     const smaskContent = smask.get("G");
     const smaskOptions = {
@@ -887,7 +894,8 @@ class PartialEvaluator {
       task,
       stateManager.state.clone({ newPath: true }),
       localColorSpaceCache,
-      seenRefs
+      seenRefs,
+      colorFilterConfig
     );
   }
 
@@ -944,7 +952,8 @@ class PartialEvaluator {
     patternDict,
     operatorList,
     task,
-    localTilingPatternCache
+    localTilingPatternCache,
+    colorFilterConfig = null
   ) {
     // Create an IR of the pattern code.
     const tilingOpList = new OperatorList();
@@ -960,6 +969,7 @@ class PartialEvaluator {
       task,
       resources: patternResources,
       operatorList: tilingOpList,
+      colorFilterConfig,
     })
       .then(function () {
         const operatorListIR = tilingOpList.getIR();
@@ -1162,7 +1172,8 @@ class PartialEvaluator {
                 task,
                 stateManager,
                 localColorSpaceCache,
-                seenRefs
+                seenRefs,
+                colorFilterConfig
               )
             );
             gStateObj.push([key, true]);
@@ -1353,7 +1364,12 @@ class PartialEvaluator {
 
         if (translatedFont.isType3Font) {
           try {
-            await translated.loadType3Data(this, resources, task);
+            await translated.loadType3Data(
+              this,
+              resources,
+              task,
+              colorFilterConfig
+            );
           } catch (reason) {
             throw new Error(`Type3 font load error: ${reason}`);
           }
@@ -1566,7 +1582,8 @@ class PartialEvaluator {
     task,
     localColorSpaceCache,
     localTilingPatternCache,
-    localShadingPatternCache
+    localShadingPatternCache,
+    colorFilterConfig = null
   ) {
     // compile tiling patterns
     const patternName = args.pop();
@@ -1579,7 +1596,9 @@ class PartialEvaluator {
         localTilingPatternCache.getByRef(rawPattern);
       if (localTilingPattern) {
         try {
-          const color = cs.base ? cs.base.getRgbHex(args, 0) : null;
+          const color = cs.base
+            ? cs.base.getRgbHex(args, 0, colorFilterConfig)
+            : null;
           const tilingPatternIR = getTilingPatternIR(
             localTilingPattern.operatorListIR,
             localTilingPattern.dict,
@@ -1598,7 +1617,9 @@ class PartialEvaluator {
         const typeNum = dict.get("PatternType");
 
         if (typeNum === PatternType.TILING) {
-          const color = cs.base ? cs.base.getRgbHex(args, 0) : null;
+          const color = cs.base
+            ? cs.base.getRgbHex(args, 0, colorFilterConfig)
+            : null;
           return this.handleTilingType(
             fn,
             color,
@@ -1607,7 +1628,8 @@ class PartialEvaluator {
             dict,
             operatorList,
             task,
-            localTilingPatternCache
+            localTilingPatternCache,
+            colorFilterConfig
           );
         } else if (typeNum === PatternType.SHADING) {
           const shading = dict.get("Shading");
@@ -1738,6 +1760,7 @@ class PartialEvaluator {
     initialState = null,
     fallbackFontDict = null,
     prevRefs = null,
+    colorFilterConfig = null,
   }) {
     const objId = stream.dict?.objId;
     const seenRefs = new RefSet(prevRefs);
@@ -1862,7 +1885,8 @@ class PartialEvaluator {
                       task,
                       stateManager.state.clone({ newPath: true }),
                       localColorSpaceCache,
-                      seenRefs
+                      seenRefs,
+                      colorFilterConfig
                     )
                     .then(function () {
                       stateManager.restore();
@@ -2033,48 +2057,50 @@ class PartialEvaluator {
           }
           case OPS.setFillColor:
             cs = stateManager.state.fillColorSpace;
-            args = [cs.getRgbHex(args, 0)];
+            args = [cs.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setFillRGBColor;
             break;
           case OPS.setStrokeColor:
             cs = stateManager.state.strokeColorSpace;
-            args = [cs.getRgbHex(args, 0)];
+            args = [cs.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setStrokeRGBColor;
             break;
           case OPS.setFillGray:
             stateManager.state.fillColorSpace = ColorSpaceUtils.gray;
-            args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setFillRGBColor;
             break;
           case OPS.setStrokeGray:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.gray;
-            args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setStrokeRGBColor;
             break;
           case OPS.setFillCMYKColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.cmyk;
             console.log("[tiandiyiqi] setFillCMYKColor operator called", args);
-            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setFillRGBColor;
             break;
           case OPS.setStrokeCMYKColor:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.cmyk;
-            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setStrokeRGBColor;
             break;
           case OPS.setFillRGBColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.rgb;
-            args = [ColorSpaceUtils.rgb.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)];
             break;
           case OPS.setStrokeRGBColor:
             stateManager.state.strokeColorSpace = ColorSpaceUtils.rgb;
-            args = [ColorSpaceUtils.rgb.getRgbHex(args, 0)];
+            args = [ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)];
             break;
           case OPS.setFillColorN:
             cs = stateManager.state.patternFillColorSpace;
             if (!cs) {
               if (isNumberArray(args, null)) {
-                args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+                args = [
+                  ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig),
+                ];
                 fn = OPS.setFillRGBColor;
                 break;
               }
@@ -2094,19 +2120,22 @@ class PartialEvaluator {
                   task,
                   localColorSpaceCache,
                   localTilingPatternCache,
-                  localShadingPatternCache
+                  localShadingPatternCache,
+                  colorFilterConfig
                 )
               );
               return;
             }
-            args = [cs.getRgbHex(args, 0)];
+            args = [cs.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setFillRGBColor;
             break;
           case OPS.setStrokeColorN:
             cs = stateManager.state.patternStrokeColorSpace;
             if (!cs) {
               if (isNumberArray(args, null)) {
-                args = [ColorSpaceUtils.gray.getRgbHex(args, 0)];
+                args = [
+                  ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig),
+                ];
                 fn = OPS.setStrokeRGBColor;
                 break;
               }
@@ -2126,12 +2155,13 @@ class PartialEvaluator {
                   task,
                   localColorSpaceCache,
                   localTilingPatternCache,
-                  localShadingPatternCache
+                  localShadingPatternCache,
+                  colorFilterConfig
                 )
               );
               return;
             }
-            args = [cs.getRgbHex(args, 0)];
+            args = [cs.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setStrokeRGBColor;
             break;
 
@@ -4925,7 +4955,7 @@ class TranslatedFont {
     );
   }
 
-  loadType3Data(evaluator, resources, task) {
+  loadType3Data(evaluator, resources, task, colorFilterConfig = null) {
     if (this.#type3Loaded) {
       return this.#type3Loaded;
     }
@@ -4963,6 +4993,7 @@ class TranslatedFont {
             task,
             resources: fontResources,
             operatorList,
+            colorFilterConfig,
           })
           .then(() => {
             // According to the PDF specification, section "9.6.5 Type 3 Fonts"

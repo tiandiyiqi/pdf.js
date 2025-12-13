@@ -17,6 +17,7 @@
 
 import { BaseTreeViewer } from "./base_tree_viewer.js";
 import { ColorConverter } from "./pdfjs.js";
+import { ColorFilterConfig } from "../src/display/color_filter_config.js";
 
 /**
  * @typedef {Object} PDFInkListViewerOptions
@@ -43,6 +44,9 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     // 持久化的油墨可见性状态（跨文档重新加载保持，按页面存储）
     this.inkVisibilityState = new Map(); // Map<pageNumber, Map<inkName, visible>>
+
+    // 创建ColorFilterConfig实例（方案D）
+    this._colorFilterConfig = new ColorFilterConfig();
 
     // 监听页面渲染事件和页面切换事件
     this._handlePageRendered = this._handlePageRendered.bind(this);
@@ -425,7 +429,7 @@ class PDFInkListViewer extends BaseTreeViewer {
         eyeIcon.classList.remove("eyeHidden");
         eyeIcon.classList.add("eyeVisible");
       }
-      // 更新ColorConverter（用于当前页面的过滤）
+      // 更新ColorFilterConfig（方案D）
       const channelNameMap = {
         青色: "Cyan",
         洋红色: "Magenta",
@@ -433,19 +437,21 @@ class PDFInkListViewer extends BaseTreeViewer {
         黑色: "Black",
       };
       const colorConverterName = channelNameMap[ink.name] || ink.name;
+      this._colorFilterConfig.setVisibility(colorConverterName, true);
+      // 保持向后兼容：同时更新ColorConverter
       ColorConverter.updateColorState(colorConverterName, true);
     }
 
     // 更新CMYK组图标状态
     this.updateCMYKGroupVisibility();
 
-    // 触发 inkstatechanged 事件（会重新加载文档，但只影响当前页面的显示）
+    // 触发 colorfilterconfig 事件（方案D）
     console.log(
-      `[PDFInkListViewer] 全部显示（页面${this.currentPageNumber}）- 触发 inkstatechanged 事件`
+      `[PDFInkListViewer] 全部显示（页面${this.currentPageNumber}）- 触发 colorfilterconfig 事件`
     );
-    this.eventBus.dispatch("inkstatechanged", {
+    this.eventBus.dispatch("colorfilterconfig", {
       source: this,
-      inks: this.inks,
+      promise: Promise.resolve(this._colorFilterConfig),
     });
   }
 
@@ -464,7 +470,7 @@ class PDFInkListViewer extends BaseTreeViewer {
         eyeIcon.classList.remove("eyeVisible");
         eyeIcon.classList.add("eyeHidden");
       }
-      // 更新ColorConverter（用于当前页面的过滤）
+      // 更新ColorFilterConfig（方案D）
       const channelNameMap = {
         青色: "Cyan",
         洋红色: "Magenta",
@@ -472,19 +478,21 @@ class PDFInkListViewer extends BaseTreeViewer {
         黑色: "Black",
       };
       const colorConverterName = channelNameMap[ink.name] || ink.name;
+      this._colorFilterConfig.setVisibility(colorConverterName, false);
+      // 保持向后兼容：同时更新ColorConverter
       ColorConverter.updateColorState(colorConverterName, false);
     }
 
     // 更新CMYK组图标状态
     this.updateCMYKGroupVisibility();
 
-    // 触发 inkstatechanged 事件（会重新加载文档，但只影响当前页面的显示）
+    // 触发 colorfilterconfig 事件（方案D）
     console.log(
-      `[PDFInkListViewer] 全部隐藏（页面${this.currentPageNumber}）- 触发 inkstatechanged 事件`
+      `[PDFInkListViewer] 全部隐藏（页面${this.currentPageNumber}）- 触发 colorfilterconfig 事件`
     );
-    this.eventBus.dispatch("inkstatechanged", {
+    this.eventBus.dispatch("colorfilterconfig", {
       source: this,
-      inks: this.inks,
+      promise: Promise.resolve(this._colorFilterConfig),
     });
   }
 
@@ -696,17 +704,23 @@ class PDFInkListViewer extends BaseTreeViewer {
             );
             channelEyeIcon.classList.toggle("eyeHidden", !allVisible);
             channelEyeIcon.classList.toggle("eyeVisible", allVisible);
+            // 更新ColorFilterConfig（方案D）
+            this._colorFilterConfig.setVisibility(
+              colorConverterName,
+              allVisible
+            );
+            // 保持向后兼容：同时更新ColorConverter
             ColorConverter.updateColorState(colorConverterName, allVisible);
           }
         }
 
-        // 触发 inkstatechanged 事件，通知应用重新加载文档以应用过滤器
+        // 触发 colorfilterconfig 事件（方案D）
         console.log(
-          `[PDFInkListViewer] 触发 inkstatechanged 事件: CMYK组 -> ${allVisible}`
+          `[PDFInkListViewer] 触发 colorfilterconfig 事件: CMYK组 -> ${allVisible}`
         );
-        this.eventBus.dispatch("inkstatechanged", {
+        this.eventBus.dispatch("colorfilterconfig", {
           source: this,
-          inks: this.inks,
+          promise: Promise.resolve(this._colorFilterConfig),
         });
       } else {
         // 单个通道或专色点击事件
@@ -719,7 +733,7 @@ class PDFInkListViewer extends BaseTreeViewer {
         eyeIcon.classList.toggle("eyeHidden", !ink.visible);
         eyeIcon.classList.toggle("eyeVisible", ink.visible);
 
-        // 更新ColorConverter
+        // 更新ColorFilterConfig（方案D）
         const channelNameMap = {
           青色: "Cyan",
           洋红色: "Magenta",
@@ -727,18 +741,20 @@ class PDFInkListViewer extends BaseTreeViewer {
           黑色: "Black",
         };
         const colorConverterName = channelNameMap[ink.name] || ink.name;
+        this._colorFilterConfig.setVisibility(colorConverterName, ink.visible);
+        // 保持向后兼容：同时更新ColorConverter
         ColorConverter.updateColorState(colorConverterName, ink.visible);
 
         // 更新CMYK组图标状态
         this.updateCMYKGroupVisibility();
 
-        // 触发 inkstatechanged 事件，通知应用重新加载文档以应用过滤器
+        // 触发 colorfilterconfig 事件（方案D）
         console.log(
-          `[PDFInkListViewer] 触发 inkstatechanged 事件: ${ink.name} -> ${ink.visible}`
+          `[PDFInkListViewer] 触发 colorfilterconfig 事件: ${ink.name} -> ${ink.visible}`
         );
-        this.eventBus.dispatch("inkstatechanged", {
+        this.eventBus.dispatch("colorfilterconfig", {
           source: this,
-          inks: this.inks,
+          promise: Promise.resolve(this._colorFilterConfig),
         });
       }
     });

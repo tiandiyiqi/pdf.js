@@ -444,6 +444,7 @@ class Page {
     cacheKey,
     annotationStorage = null,
     modifiedIds = null,
+    colorFilterConfig = null,
   }) {
     const contentStreamPromise = this.getContentStream();
     const resourcesPromise = this.loadResources(RESOURCES_KEYS_OPERATOR_LIST);
@@ -537,11 +538,20 @@ class Page {
         cacheKey,
       });
 
+      // Create ColorFilterConfig instance if config provided
+      let colorFilterConfigInstance = null;
+      if (colorFilterConfig) {
+        const { ColorFilterConfig } =
+          await import("../display/color_filter_config.js");
+        colorFilterConfigInstance = new ColorFilterConfig(colorFilterConfig);
+      }
+
       await partialEvaluator.getOperatorList({
         stream: contentStream,
         task,
         resources,
         operatorList: opList,
+        colorFilterConfig: colorFilterConfigInstance,
       });
       return opList;
     });

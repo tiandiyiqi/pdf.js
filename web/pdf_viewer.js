@@ -1204,6 +1204,7 @@ class PDFViewer {
     this._location = null;
     this._pagesRotation = 0;
     this._optionalContentConfigPromise = null;
+    this._colorFilterConfigPromise = null;
     this._firstPageCapability = Promise.withResolvers();
     this._onePageRenderedCapability = Promise.withResolvers();
     this._pagesCapability = Promise.withResolvers();
@@ -2055,6 +2056,28 @@ class PDFViewer {
       source: this,
       promise,
     });
+  }
+
+  /**
+   * @type {Promise<ColorFilterConfig>}
+   */
+  get colorFilterConfigPromise() {
+    return this._colorFilterConfigPromise || Promise.resolve(null);
+  }
+
+  /**
+   * @param {Promise<ColorFilterConfig>} promise
+   */
+  set colorFilterConfigPromise(promise) {
+    if (!(promise instanceof Promise)) {
+      throw new Error(`Invalid colorFilterConfigPromise: ${promise}`);
+    }
+    if (!this.pdfDocument) {
+      return;
+    }
+    this._colorFilterConfigPromise = promise;
+
+    this.refresh(false, { colorFilterConfigPromise: promise });
   }
 
   /**

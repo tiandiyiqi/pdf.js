@@ -1466,6 +1466,7 @@ class PDFPageProxy {
     transform = null,
     background = null,
     optionalContentConfigPromise = null,
+    colorFilterConfigPromise = null,
     annotationCanvasMap = null,
     pageColors = null,
     printAnnotationStorage = null,
@@ -1489,6 +1490,9 @@ class PDFPageProxy {
 
     optionalContentConfigPromise ||=
       this._transport.getOptionalContentConfig(renderingIntent);
+
+    // Add colorFilterConfigPromise to intentArgs for passing to Worker
+    intentArgs.colorFilterConfigPromise = colorFilterConfigPromise;
 
     let intentState = this._intentStates.get(cacheKey);
     if (!intentState) {
@@ -1924,11 +1928,12 @@ class PDFPageProxy {
   /**
    * @private
    */
-  _pumpOperatorList({
+  async _pumpOperatorList({
     renderingIntent,
     cacheKey,
     annotationStorageSerializable,
     modifiedIds,
+    colorFilterConfigPromise = null,
   }) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -1938,6 +1943,21 @@ class PDFPageProxy {
     }
     const { map, transfer } = annotationStorageSerializable;
 
+    // Resolve colorFilterConfigPromise if provided
+    let colorFilterConfig = null;
+    if (colorFilterConfigPromise) {
+      try {
+        colorFilterConfig = await colorFilterConfigPromise;
+        // Serialize the config object for transfer to Worker
+        if (colorFilterConfig) {
+          colorFilterConfig = colorFilterConfig.getConfig();
+        }
+      } catch (e) {
+        // If promise rejects, use null (no filtering)
+        colorFilterConfig = null;
+      }
+    }
+
     const readableStream = this._transport.messageHandler.sendWithStream(
       "GetOperatorList",
       {
@@ -1946,6 +1966,7 @@ class PDFPageProxy {
         cacheKey,
         annotationStorage: map,
         modifiedIds,
+        colorFilterConfig,
       },
       transfer
     );
