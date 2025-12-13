@@ -146,6 +146,7 @@ const filtered = colorFilterConfig
 - **#toRgb(src, srcOffset, srcScale, dest, destOffset, skipFilter = false, colorFilterConfig = null)**
   - 添加colorFilterConfig参数（第921行）
   - 在CMYK到RGB转换时使用配置对象（第945-947行）
+
   ```javascript
   const filteredCMYK = colorFilterConfig
     ? colorFilterConfig.filterCMYK([c, m, y, k])
@@ -184,11 +185,13 @@ const filtered = colorFilterConfig
   - 添加colorFilterConfig参数（第478行）
   - 添加调试日志（第479-484行）
   - 专色过滤时使用配置对象（第512-514行）
+
   ```javascript
   const filteredValue = colorFilterConfig
     ? colorFilterConfig.filterSpot(channelName, spotValue)
     : ColorConverter.filterSpot(channelName, spotValue);
   ```
+
   - 调用base.getRgbItem时传递配置（第537行）
 
 - **getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01, colorFilterConfig = null)**
@@ -213,53 +216,77 @@ const filtered = colorFilterConfig
 
 **修改的方法**：
 
-1. **getOperatorList({ ..., colorFilterConfig = null })**
-   - 添加colorFilterConfig参数
+1. **getOperatorList({ ..., colorFilterConfig = null })（第1755-1764行）**
+   - 添加colorFilterConfig参数（第1763行）
    - 在所有颜色转换调用时传递配置对象
+   - 递归调用时传递配置（第532-540行，第967-973行，第4991-4997行）
 
-2. **buildFormXObject(..., colorFilterConfig = null)**
+2. **buildFormXObject(..., colorFilterConfig = null)（第459-468行）**
+   - 添加colorFilterConfig参数（第468行）
+   - 在smask.backdrop颜色转换时使用配置（第512-516行）
+   - 调用getOperatorList时传递配置（第532-540行）
+
+3. **handleSMask(..., colorFilterConfig = null)（第858-867行）**
+   - 添加colorFilterConfig参数（第866行）
+   - 调用buildFormXObject时传递配置（第889-898行）
+   - 在getOperatorList中被调用时传递配置（第1168-1176行）
+
+4. **handleColorN(..., colorFilterConfig = null)（第1575-1587行）**
+   - 添加colorFilterConfig参数（第1586行）
+   - 在tilingPattern颜色转换时使用配置（第1600行，第1621行）
+   - 调用handleTilingType时传递配置（第1623-1632行）
+   - 在getOperatorList中被调用时传递配置（第2113-2124行，第2148-2159行）
+
+5. **handleTilingType(..., colorFilterConfig = null)（第947-957行）**
+   - 添加colorFilterConfig参数（第956行）
+   - 调用getOperatorList时传递配置（第967-973行）
+
+6. **loadType3Data(evaluator, resources, task, colorFilterConfig = null)（第4958行）**
    - 添加colorFilterConfig参数
-   - 在smask.backdrop颜色转换时使用配置
+   - 在Type3字体渲染时调用getOperatorList传递配置（第4991-4997行）
 
-3. **handleSMask(..., colorFilterConfig = null)**
-   - 添加colorFilterConfig参数
-   - 调用buildFormXObject时传递配置
+**修改的调用点（颜色转换）**：
 
-4. **handleColorN(..., colorFilterConfig = null)**
-   - 添加colorFilterConfig参数
-   - 在颜色转换时传递配置
-
-5. **handleTilingType(..., colorFilterConfig = null)**
-   - 添加colorFilterConfig参数
-   - 调用getOperatorList时传递配置
-
-6. **loadType3Data(evaluator, resources, task, colorFilterConfig = null)**
-   - 添加colorFilterConfig参数
-   - 在Type3字体渲染时传递配置
-
-**修改的调用点**：
-
-- `OPS.setFillColor`: `cs.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setStrokeColor`: `cs.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setFillGray`: `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setStrokeGray`: `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setFillCMYKColor`: `ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setStrokeCMYKColor`: `ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setFillRGBColor`: `ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setStrokeRGBColor`: `ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setFillColorN`: `cs.getRgbHex(args, 0, colorFilterConfig)`
-- `OPS.setStrokeColorN`: `cs.getRgbHex(args, 0, colorFilterConfig)`
-- `smask.backdrop`: `colorSpace.getRgbHex(smask.backdrop, 0, colorFilterConfig)`
-- `tilingPattern color`: `cs.base.getRgbHex(args, 0, colorFilterConfig)`
+- **第2060行**：`OPS.setFillColor` → `cs.getRgbHex(args, 0, colorFilterConfig)`
+- **第2065行**：`OPS.setStrokeColor` → `cs.getRgbHex(args, 0, colorFilterConfig)`
+- **第2070行**：`OPS.setFillGray` → `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
+- **第2075行**：`OPS.setStrokeGray` → `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
+- **第2081行**：`OPS.setFillCMYKColor` → `ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)`
+- **第2086行**：`OPS.setStrokeCMYKColor` → `ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)`
+- **第2091行**：`OPS.setFillRGBColor` → `ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)`
+- **第2095行**：`OPS.setStrokeRGBColor` → `ColorSpaceUtils.rgb.getRgbHex(args, 0, colorFilterConfig)`
+- **第2102行**：`OPS.setFillColorN`（灰度情况） → `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
+- **第2129行**：`OPS.setFillColorN`（一般情况） → `cs.getRgbHex(args, 0, colorFilterConfig)`
+- **第2137行**：`OPS.setStrokeColorN`（灰度情况） → `ColorSpaceUtils.gray.getRgbHex(args, 0, colorFilterConfig)`
+- **第2164行**：`OPS.setStrokeColorN`（一般情况） → `cs.getRgbHex(args, 0, colorFilterConfig)`
+- **第512-516行**：`smask.backdrop` → `colorSpace.getRgbHex(smask.backdrop, 0, colorFilterConfig)`
+- **第1600行**：`tilingPattern color`（缓存命中） → `cs.base.getRgbHex(args, 0, colorFilterConfig)`
+- **第1621行**：`tilingPattern color`（新建） → `cs.base.getRgbHex(args, 0, colorFilterConfig)`
 
 **递归调用传递**：
 
-- `getOperatorList`的所有递归调用都传递colorFilterConfig
-- `buildFormXObject`调用`getOperatorList`时传递配置
-- `handleTilingType`调用`getOperatorList`时传递配置
-- `loadType3Data`调用`getOperatorList`时传递配置
+- **第532-540行**：`buildFormXObject` → `getOperatorList`（传递colorFilterConfig）
+- **第967-973行**：`handleTilingType` → `getOperatorList`（传递colorFilterConfig）
+- **第4991-4997行**：`loadType3Data` → `getOperatorList`（传递colorFilterConfig）
+- **第889-898行**：`handleSMask` → `buildFormXObject`（传递colorFilterConfig）
+- **第1623-1632行**：`handleColorN` → `handleTilingType`（传递colorFilterConfig）
+- **第1880-1890行**：`getOperatorList` → `buildFormXObject`（传递colorFilterConfig）
+- **第1168-1176行**：`getOperatorList` → `handleSMask`（传递colorFilterConfig）
+- **第2113-2124行**：`getOperatorList` → `handleColorN`（传递colorFilterConfig，setFillColorN）
+- **第2148-2159行**：`getOperatorList` → `handleColorN`（传递colorFilterConfig，setStrokeColorN）
 
-**影响范围**：所有PDF操作符的颜色转换，包括填充、描边、图像、图案等
+**关键代码位置**：
+
+- 第1755-1764行：getOperatorList方法签名
+- 第2058-2166行：颜色操作符处理（主要修改区域，包含所有颜色转换调用）
+- 第512-516行：smask.backdrop颜色转换
+- 第1600行、1621行：tilingPattern颜色转换
+- 第459-540行：buildFormXObject方法（包含smask处理和递归调用）
+- 第947-973行：handleTilingType方法（递归调用getOperatorList）
+- 第1575-1632行：handleColorN方法（处理Pattern颜色空间）
+- 第4958-4997行：loadType3Data方法（Type3字体渲染）
+
+**影响范围**：所有PDF操作符的颜色转换，包括填充、描边、图像、图案、遮罩、Type3字体等
 
 ---
 
@@ -551,7 +578,7 @@ this.eventBus.dispatch("colorfilterconfig", {
            keepAnnotationLayer: true,
            keepTextLayer: true,
          });
-         
+
          console.log(
            `[PDFPageView] 页面${this.id} reset()完成，renderingState:`,
            this.renderingState
@@ -576,9 +603,9 @@ this.eventBus.dispatch("colorfilterconfig", {
 **技术说明**：
 
 1. **为什么需要cleanup()**：
-   - PDFPageProxy内部缓存了operatorList（存储在_intentStates中）
+   - PDFPageProxy内部缓存了operatorList（存储在\_intentStates中）
    - 如果不清除缓存，即使配置变化，仍会使用旧的operatorList（基于旧配置生成）
-   - cleanup()清除_intentStates，强制重新生成operatorList
+   - cleanup()清除\_intentStates，强制重新生成operatorList
 
 2. **为什么需要reset()**：
    - 将renderingState设置为INITIAL
@@ -831,7 +858,7 @@ getRgbHex(src, srcOffset, colorFilterConfig = null) {
 - `web/app.js`: ~10行（事件监听，移除~140行方案F代码）
 - `web/pdf_viewer.js`: ~25行（getter/setter）
 - `web/pdf_page_view.js`: ~40行
-  - 初始化_colorFilterConfigPromise
+  - 初始化\_colorFilterConfigPromise
   - update方法中配置变化检测（第703-739行）
   - cleanup()调用清除缓存（第726行）
   - reset()调用重置页面（第730-733行）
@@ -934,6 +961,7 @@ const colorFilterConfigInstance = new ColorFilterConfig(colorFilterConfig); // �
 ### 2. 页面重置逻辑和缓存清除
 
 **问题**：配置更新时，已渲染的页面需要重新渲染，但存在两个问题：
+
 1. 页面状态需要重置为INITIAL才能触发重新渲染
 2. operatorList缓存需要清除，否则会使用基于旧配置生成的缓存
 
@@ -1110,6 +1138,7 @@ if (previousPromise !== colorFilterConfigPromise && this.pdfPage) {
 ### 修复验证
 
 修复后，`AlternateCS.getRgbItem`方法能够正确接收到`colorFilterConfig`参数，控制台会显示：
+
 ```
 [AlternateCS.getRgbItem] 调用，colorFilterConfig: true 通道: [...]
 ```
