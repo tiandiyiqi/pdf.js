@@ -463,7 +463,8 @@ class AlternateCS extends ColorSpace {
       });
     }
   }
-  //专色的颜色转换为RGB
+
+  // 专色的颜色转换为RGB
   getRgbItem(src, srcOffset, dest, destOffset) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -520,7 +521,7 @@ class AlternateCS extends ColorSpace {
     this.base.getRgbItem(tmpBuf, 0, dest, destOffset, true); // skipFilter = true，跳过颜色过滤
   }
 
-  //批量专色的颜色转换为RGB
+  // 批量专色的颜色转换为RGB
   getRgbBuffer(src, srcOffset, count, dest, destOffset, bits, alpha01) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(

@@ -2414,13 +2414,10 @@ const PDFViewerApplication = {
 
             console.log(`[app.js] 重新渲染完成`);
 
-            // 重置油墨清单的第一页渲染标记，并手动触发渲染
+            // 使用轻量级更新方法：只更新数据，不重新创建组件
             if (this.pdfInkListViewer) {
-              this.pdfInkListViewer._firstPageRendered = false;
-              // 等待一小段时间确保operatorList已更新
-              setTimeout(() => {
-                this.pdfInkListViewer.render();
-              }, 200);
+              // 立即触发油墨清单更新，使用现有的轻量级方法
+              this.pdfInkListViewer._updateInkListFromCurrentPage();
             }
 
             // 恢复视图状态
