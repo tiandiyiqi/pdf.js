@@ -580,6 +580,7 @@ class PartialEvaluator {
     cacheKey,
     localImageCache,
     localColorSpaceCache,
+    colorFilterConfig = null,
   }) {
     const { maxImageSize, ignoreErrors, isOffscreenCanvasSupported } =
       this.options;
@@ -721,6 +722,7 @@ class PartialEvaluator {
           pdfFunctionFactory: this._pdfFunctionFactory,
           globalColorSpaceCache: this.globalColorSpaceCache,
           localColorSpaceCache,
+          colorFilterConfig,
         });
         // We force the use of RGBA_32BPP images here, because we can't handle
         // any other kind.
@@ -792,7 +794,10 @@ class PartialEvaluator {
       // For large (at least 500x500) or more complex images that we'll cache
       // globally, check if the image is still cached locally on the main-thread
       // to avoid having to re-parse the image (since that can be slow).
-      if (w * h > 250000 || hasMask) {
+      //
+      // 注意：当colorFilterConfig存在时，跳过缓存检查，强制重新生成图像
+      // 这样可以确保使用新的颜色过滤配置
+      if (!colorFilterConfig && (w * h > 250000 || hasMask)) {
         const localLength = await this.handler.sendWithPromise("commonobj", [
           objId,
           "CopyLocalImage",
@@ -815,6 +820,7 @@ class PartialEvaluator {
       pdfFunctionFactory: this._pdfFunctionFactory,
       globalColorSpaceCache: this.globalColorSpaceCache,
       localColorSpaceCache,
+      colorFilterConfig,
     })
       .then(async imageObj => {
         imgData = await imageObj.createImageData(
@@ -1902,6 +1908,7 @@ class PartialEvaluator {
                       cacheKey: name,
                       localImageCache,
                       localColorSpaceCache,
+                      colorFilterConfig,
                     })
                     .then(resolveXObject, rejectXObject);
                   return;
@@ -1966,6 +1973,7 @@ class PartialEvaluator {
                 cacheKey,
                 localImageCache,
                 localColorSpaceCache,
+                colorFilterConfig,
               })
             );
             return;
@@ -2077,7 +2085,6 @@ class PartialEvaluator {
             break;
           case OPS.setFillCMYKColor:
             stateManager.state.fillColorSpace = ColorSpaceUtils.cmyk;
-            console.log("[tiandiyiqi] setFillCMYKColor operator called", args);
             args = [ColorSpaceUtils.cmyk.getRgbHex(args, 0, colorFilterConfig)];
             fn = OPS.setFillRGBColor;
             break;

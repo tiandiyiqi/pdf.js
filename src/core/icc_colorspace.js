@@ -150,24 +150,6 @@ class IccColorSpace extends ColorSpace {
     skipFilter = false,
     colorFilterConfig = null
   ) {
-    // #region agent log
-    // 发送调试日志到本地服务器，记录方法调用信息
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "icc_colorspace.js:112",
-        message: "IccColorSpace.getRgbItem called",
-        data: {
-          numComps: this.numComps, // 当前颜色空间的组件数
-          isWorker: typeof window === "undefined", // 是否在Worker线程中执行
-        },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "C,D",
-      }),
-    }).catch(() => {});
-    // #endregion
     // 处理CMYK颜色空间（4个组件）
     if (this.numComps === 4 && !skipFilter) {
       // 创建过滤后的数据副本
@@ -176,6 +158,7 @@ class IccColorSpace extends ColorSpace {
       filteredSrc[1] = src[srcOffset + 1]; // M分量
       filteredSrc[2] = src[srcOffset + 2]; // Y分量
       filteredSrc[3] = src[srcOffset + 3]; // K分量
+
       // 应用颜色过滤算法（使用传递的配置或回退到静态类）
       const filtered = colorFilterConfig
         ? colorFilterConfig.filterCMYK([
@@ -190,34 +173,6 @@ class IccColorSpace extends ColorSpace {
             filteredSrc[2],
             filteredSrc[3],
           ]);
-
-      // #region agent log
-      // 记录过滤后的CMYK值到调试服务器
-      fetch(
-        "http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "icc_colorspace.js:145",
-            message: "ICC CMYK filtered",
-            data: {
-              original: [
-                // 原始CMYK值
-                filteredSrc[0],
-                filteredSrc[1],
-                filteredSrc[2],
-                filteredSrc[3],
-              ],
-              filtered: filtered, // 过滤后的CMYK值
-            },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "post-fix",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
 
       // 将过滤后的值复制回临时数组
       filteredSrc[0] = filtered[0];
@@ -252,15 +207,10 @@ class IccColorSpace extends ColorSpace {
     alpha01,
     colorFilterConfig = null
   ) {
-    // 1. 调试日志记录（发送到本地服务器）
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      // 记录方法调用信息...
-    }).catch(() => {});
-
-    // 2. 准备数据：截取需要处理的数据段
+    // 准备数据：截取需要处理的数据段
     src = src.subarray(srcOffset, srcOffset + count * this.numComps);
 
-    // 3. 位深转换：如果不是8位数据，进行归一化处理
+    // 位深转换：如果不是8位数据，进行归一化处理
     if (bits !== 8) {
       const scale = 255 / ((1 << bits) - 1);
       for (let i = 0, ii = src.length; i < ii; i++) {
@@ -268,46 +218,44 @@ class IccColorSpace extends ColorSpace {
       }
     }
 
-    // 4. CMYK 特殊处理
+    // CMYK 特殊处理：应用颜色过滤
     if (this.numComps === 4) {
-      console.log(
-        "[tiandiyiqi] 批量图像处理 过滤前的CMYK值：",
-        src.slice(0, 4).join(",")
-      );
       // 创建过滤后的数据副本
       const filteredSrc = new Float32Array(src.length);
-      for (let i = 0; i < count; i++) {
-        const offset = i * 4;
-        // 应用颜色过滤算法（使用传递的配置或回退到静态类）
-        const filtered = colorFilterConfig
-          ? colorFilterConfig.filterCMYK([
-              src[offset],
-              src[offset + 1],
-              src[offset + 2],
-              src[offset + 3],
-            ])
-          : ColorConverter.filterCMYK([
-              src[offset],
-              src[offset + 1],
-              src[offset + 2],
-              src[offset + 3],
-            ]);
-        // 存储过滤后的值
-        filteredSrc[offset] = filtered[0];
-        filteredSrc[offset + 1] = filtered[1];
-        filteredSrc[offset + 2] = filtered[2];
-        filteredSrc[offset + 3] = filtered[3];
-      }
-      console.log(
-        "[tiandiyiqi] 批量图像处理 过滤后的CMYK值：",
-        filteredSrc.slice(0, 4).join(",")
-      );
-      // 5. 再次记录调试信息（过滤后的数据）
-      fetch("http://127.0.0.1:7242/ingest/...", {
-        /* 过滤数据日志 */
-      }).catch(() => {});
 
-      // 6. 执行实际的颜色转换（使用过滤后的数据）
+      // 高性能批量过滤：直接操作TypedArray，避免创建临时数组
+      if (colorFilterConfig) {
+        // 获取通道可见性（只查询一次）- 使用isVisible方法而不是直接get
+        const cVisible = colorFilterConfig.isVisible("Cyan");
+        const mVisible = colorFilterConfig.isVisible("Magenta");
+        const yVisible = colorFilterConfig.isVisible("Yellow");
+        const kVisible = colorFilterConfig.isVisible("Black");
+
+        // 批量过滤：直接在循环中应用过滤
+        for (let i = 0; i < src.length; i += 4) {
+          filteredSrc[i] = cVisible ? src[i] : 0; // C
+          filteredSrc[i + 1] = mVisible ? src[i + 1] : 0; // M
+          filteredSrc[i + 2] = yVisible ? src[i + 2] : 0; // Y
+          filteredSrc[i + 3] = kVisible ? src[i + 3] : 0; // K
+        }
+      } else {
+        // 回退到静态ColorConverter（兼容性）
+        for (let i = 0; i < count; i++) {
+          const offset = i * 4;
+          const filtered = ColorConverter.filterCMYK([
+            src[offset],
+            src[offset + 1],
+            src[offset + 2],
+            src[offset + 3],
+          ]);
+          filteredSrc[offset] = filtered[0];
+          filteredSrc[offset + 1] = filtered[1];
+          filteredSrc[offset + 2] = filtered[2];
+          filteredSrc[offset + 3] = filtered[3];
+        }
+      }
+
+      // 执行实际的颜色转换（使用过滤后的数据）
       QCMS._mustAddAlpha = alpha01 && dest.buffer === filteredSrc.buffer;
       QCMS._destBuffer = dest;
       QCMS._destOffset = destOffset;
@@ -317,7 +265,7 @@ class IccColorSpace extends ColorSpace {
       QCMS._mustAddAlpha = false;
       QCMS._destBuffer = null;
     } else {
-      // 7. 非 CMYK 颜色空间：直接转换原始数据
+      // 非 CMYK 颜色空间：直接转换原始数据
       QCMS._mustAddAlpha = alpha01 && dest.buffer === src.buffer;
       QCMS._destBuffer = dest;
       QCMS._destOffset = destOffset;

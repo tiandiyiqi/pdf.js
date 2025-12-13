@@ -214,7 +214,8 @@ class ColorSpace {
     actualHeight,
     bpc,
     comps,
-    alpha01
+    alpha01,
+    colorFilterConfig = null
   ) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -259,7 +260,8 @@ class ColorSpace {
         colorMap,
         0,
         bpc,
-        /* alpha01 = */ 0
+        /* alpha01 = */ 0,
+        colorFilterConfig
       );
 
       if (!needsResizing) {
@@ -284,10 +286,28 @@ class ColorSpace {
       }
     } else if (!needsResizing) {
       // Fill in the RGB values directly into |dest|.
-      this.getRgbBuffer(comps, 0, width * actualHeight, dest, 0, bpc, alpha01);
+      this.getRgbBuffer(
+        comps,
+        0,
+        width * actualHeight,
+        dest,
+        0,
+        bpc,
+        alpha01,
+        colorFilterConfig
+      );
     } else {
       rgbBuf = new Uint8ClampedArray(count * 3);
-      this.getRgbBuffer(comps, 0, count, rgbBuf, 0, bpc, /* alpha01 = */ 0);
+      this.getRgbBuffer(
+        comps,
+        0,
+        count,
+        rgbBuf,
+        0,
+        bpc,
+        /* alpha01 = */ 0,
+        colorFilterConfig
+      );
     }
 
     if (rgbBuf) {
@@ -873,7 +893,8 @@ class DeviceRgbaCS extends ColorSpace {
     actualHeight,
     bpc,
     comps,
-    alpha01
+    alpha01,
+    colorFilterConfig = null
   ) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
@@ -925,44 +946,12 @@ class DeviceCmykCS extends ColorSpace {
     let y = src[srcOffset + 2] * srcScale;
     let k = src[srcOffset + 3] * srcScale;
 
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "colorspace.js:780",
-        message: "DeviceCmykCS.#toRgb called",
-        data: { c, m, y, k, isWorker: typeof window === "undefined" },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "B",
-      }),
-    }).catch(() => {});
-    // #endregion
-
     // Apply color filter (unless skipFilter is true)
     if (!skipFilter) {
       const filteredCMYK = colorFilterConfig
         ? colorFilterConfig.filterCMYK([c, m, y, k])
         : ColorConverter.filterCMYK([c, m, y, k]);
 
-      // #region agent log
-      fetch(
-        "http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "colorspace.js:790",
-            message: "After filterCMYK",
-            data: { filtered: filteredCMYK, original: [c, m, y, k] },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            hypothesisId: "B",
-          }),
-        }
-      ).catch(() => {});
-      // #endregion
       c = filteredCMYK[0];
       m = filteredCMYK[1];
       y = filteredCMYK[2];

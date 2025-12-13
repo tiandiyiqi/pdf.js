@@ -26,16 +26,9 @@ class ColorConverter {
     overprint: false, // 叠印预览开关
   };
 
-  // 初始化日志
+  // 类初始化（静态块）
   static {
-    const stack = new Error().stack;
-    const location = typeof window !== "undefined" ? "主线程" : "Worker线程";
-    console.log(`[ColorConverter] 类初始化完成（${location}），初始配置:`, {
-      enabled: this.#colorFilterConfig.enabled,
-      overprint: this.#colorFilterConfig.overprint,
-      colors: Object.fromEntries(this.#colorFilterConfig.colors),
-    });
-    console.log(`[ColorConverter] 初始化调用栈:`, stack);
+    // 初始化完成，无需日志
   }
 
   // 事件监听器
@@ -51,21 +44,6 @@ class ColorConverter {
 
   // 配置管理方法
   static setColorFilterConfig(config) {
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "color_converter.js:52",
-        message: "setColorFilterConfig called",
-        data: { config, isWorker: typeof window === "undefined" },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "A,E",
-      }),
-    }).catch(() => {});
-    // #endregion
-
     if (config?.enabled !== undefined) {
       this.#colorFilterConfig.enabled = !!config.enabled;
     }
@@ -75,21 +53,6 @@ class ColorConverter {
     if (config?.overprint !== undefined) {
       this.#colorFilterConfig.overprint = !!config.overprint;
     }
-
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "color_converter.js:62",
-        message: "setColorFilterConfig complete",
-        data: { finalConfig: this.getColorFilterConfig() },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "A",
-      }),
-    }).catch(() => {});
-    // #endregion
   }
 
   static getColorFilterConfig() {
@@ -103,14 +66,7 @@ class ColorConverter {
 
   static updateColorState(colorName, visible) {
     if (typeof colorName === "string") {
-      console.log(
-        `[ColorConverter] updateColorState: ${colorName} -> ${visible}`
-      );
       this.#colorFilterConfig.colors.set(colorName, !!visible);
-      console.log(
-        `[ColorConverter] 更新后的配置:`,
-        this.getColorFilterConfig()
-      );
     }
   }
 
@@ -189,27 +145,6 @@ class ColorConverter {
    * @returns {number[]} 过滤后的CMYK颜色值数组
    */
   static filterCMYK(cmyk) {
-    // #region agent log
-    // 调试日志：记录方法调用时的输入参数和配置状态
-    fetch("http://127.0.0.1:7242/ingest/a7a0bbf3-c810-44bd-8abc-01573cb8b9a5", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "color_converter.js:155",
-        message: "filterCMYK entry",
-        data: {
-          cmyk,
-          enabled: this.#colorFilterConfig.enabled,
-          colors: Object.fromEntries(this.#colorFilterConfig.colors),
-          isWorker: typeof window === "undefined",
-        },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "A,B",
-      }),
-    }).catch(() => {});
-    // #endregion
-
     // 如果过滤器未启用，直接返回原始CMYK值
     if (!this.#colorFilterConfig.enabled) {
       return [...cmyk];
@@ -239,27 +174,17 @@ class ColorConverter {
 
   static filterSpot(spotName, spotValue) {
     if (!this.#colorFilterConfig.enabled) {
-      console.log(
-        `[ColorConverter] filterSpot: 过滤器未启用，返回原始值 ${spotName}=${spotValue}`
-      );
       return spotValue;
     }
 
     const shouldShow = this.#colorFilterConfig.colors.get(spotName);
-    const result = shouldShow === false ? 0 : spotValue;
-    console.log(
-      `[ColorConverter] filterSpot: ${spotName} -> ${spotValue} (shouldShow=${shouldShow}) -> ${result}`
-    );
-    return result;
+    return shouldShow === false ? 0 : spotValue;
   }
 
   // 带过滤器的转换方法
   static cmykToRgbWithFilter(cmyk) {
-    console.log(`[ColorConverter] cmykToRgbWithFilter 被调用，输入CMYK:`, cmyk);
     const filtered = this.filterCMYK(cmyk);
-    const rgb = this.cmykToRgb(filtered);
-    console.log(`[ColorConverter] cmykToRgbWithFilter 输出RGB:`, rgb);
-    return rgb;
+    return this.cmykToRgb(filtered);
   }
 
   static deviceNToRgbWithFilter(channels) {

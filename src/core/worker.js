@@ -951,19 +951,7 @@ class WorkerMessageHandler {
 
     handler.on("UpdateColorFilterConfig", async function (data) {
       const { ColorConverter } = await import("./color_converter.js");
-      console.log(
-        "[Worker] 收到UpdateColorFilterConfig消息，配置:",
-        data.config
-      );
-      console.log(
-        `[Worker] 配置详情 - enabled: ${data.config.enabled}, Cyan: ${data.config.colors?.Cyan}, Magenta: ${data.config.colors?.Magenta}`
-      );
       ColorConverter.setColorFilterConfig(data.config);
-      const updatedConfig = ColorConverter.getColorFilterConfig();
-      console.log("[Worker] ColorConverter配置已更新:", updatedConfig);
-      console.log(
-        `[Worker] 更新后配置详情 - enabled: ${updatedConfig.enabled}, Cyan: ${updatedConfig.colors?.Cyan}, Magenta: ${updatedConfig.colors?.Magenta}`
-      );
       return true;
     });
 

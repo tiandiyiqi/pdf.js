@@ -1155,3 +1155,245 @@ if (previousPromise !== colorFilterConfigPromise && this.pdfPage) {
 **重构完成时间**：2025年1月  
 **重构版本**：方案D v1.1（包含专色过滤修复）  
 **重构状态**：✅ 已完成（CMYK和专色过滤均正常工作）
+
+---
+
+## 十四、图像颜色过滤修复记录
+
+### 问题描述
+
+在方案D重构完成后，矢量图形和文字的颜色过滤正常工作，但**图像（包括CMYK图像和专色图像）的颜色过滤不生效**。
+
+### 问题分析
+
+通过代码追踪发现，图像颜色转换使用不同的调用路径：
+
+- **矢量/文字路径**：`evaluator.js` → `getRgbHex()` → `getRgbItem()` ✅ 已支持colorFilterConfig
+- **图像路径**：`image.js` → `fillRgb()` → `getRgbBuffer()` ❌ **缺少colorFilterConfig参数**
+
+具体问题：
+
+1. `ColorSpace.fillRgb()` 方法签名中没有 `colorFilterConfig` 参数
+2. `fillRgb()` 调用 `getRgbBuffer()` 时没有传递 `colorFilterConfig`
+3. `PDFImage` 构造函数没有接收和保存 `colorFilterConfig`
+4. `image.js` 调用 `fillRgb()` 时没有传递 `colorFilterConfig`
+5. `evaluator.js` 的 `buildPaintImageXObject()` 方法没有传递 `colorFilterConfig` 到 `PDFImage`
+
+### 修复方案
+
+补充完整的图像颜色过滤调用链，确保 `colorFilterConfig` 能够从 `getOperatorList` 传递到图像颜色转换的每个环节。
+
+### 修复内容
+
+#### 1. ColorSpace.fillRgb 方法修改（`src/core/colorspace.js`）
+
+**修改位置**：第208-218行
+
+- **方法签名**：添加 `colorFilterConfig = null` 参数
+- **参数传递**：在3处调用 `getRgbBuffer()` 时传递 `colorFilterConfig`：
+  - 第256-265行：颜色映射优化路径
+  - 第289-298行：直接填充路径
+  - 第301-309行：需要缩放路径
+
+**关键代码**：
+
+```javascript
+fillRgb(
+  dest,
+  originalWidth,
+  originalHeight,
+  width,
+  height,
+  actualHeight,
+  bpc,
+  comps,
+  alpha01,
+  colorFilterConfig = null  // ← 新增参数
+) {
+  // ...
+  this.getRgbBuffer(
+    allColors,
+    0,
+    numComponentColors,
+    colorMap,
+    0,
+    bpc,
+    /* alpha01 = */ 0,
+    colorFilterConfig  // ← 传递配置
+  );
+  // ...
+}
+```
+
+#### 2. DeviceRgbaCS.fillRgb 方法修改（`src/core/colorspace.js`）
+
+**修改位置**：第867-877行
+
+- **方法签名**：添加 `colorFilterConfig = null` 参数（保持一致性，虽然DeviceRgbaCS可能不需要使用）
+
+#### 3. IccColorSpace.getRgbBuffer 方法验证（`src/core/icc_colorspace.js`）
+
+**验证结果**：✅ 已正确实现
+
+- 第245-254行：方法签名已包含 `colorFilterConfig = null` 参数
+- 第282-294行：已正确使用 `colorFilterConfig` 进行CMYK过滤
+
+#### 4. PDFImage 构造函数修改（`src/core/image.js`）
+
+**修改位置**：第80-93行
+
+- **构造函数参数**：添加 `colorFilterConfig = null` 参数
+- **实例字段**：添加 `this.colorFilterConfig = colorFilterConfig` 保存配置
+
+**关键代码**：
+
+```javascript
+constructor({
+  xref,
+  res,
+  image,
+  isInline = false,
+  smask = null,
+  mask = null,
+  isMask = false,
+  pdfFunctionFactory,
+  globalColorSpaceCache,
+  localColorSpaceCache,
+  colorFilterConfig = null,  // ← 新增参数
+}) {
+  this.image = image;
+  this.colorFilterConfig = colorFilterConfig;  // ← 保存配置
+  // ...
+}
+```
+
+#### 5. PDFImage.createImageData 方法修改（`src/core/image.js`）
+
+**修改位置**：第918行
+
+- **fillRgb调用**：传递 `this.colorFilterConfig` 参数
+
+**关键代码**：
+
+```javascript
+this.colorSpace.fillRgb(
+  data,
+  originalWidth,
+  originalHeight,
+  drawWidth,
+  drawHeight,
+  actualHeight,
+  bpc,
+  comps,
+  alpha01,
+  this.colorFilterConfig // ← 传递配置
+);
+```
+
+#### 6. buildPaintImageXObject 方法修改（`src/core/evaluator.js`）
+
+**修改位置**：第575-583行
+
+- **方法签名**：添加 `colorFilterConfig = null` 参数
+- **PDFImage创建**：第717-725行，传递 `colorFilterConfig` 到 `PDFImage` 构造函数
+
+**关键代码**：
+
+```javascript
+async buildPaintImageXObject({
+  resources,
+  image,
+  isInline = false,
+  operatorList,
+  cacheKey,
+  localImageCache,
+  localColorSpaceCache,
+  colorFilterConfig = null,  // ← 新增参数
+}) {
+  // ...
+  const imageObj = new PDFImage({
+    xref: this.xref,
+    res: resources,
+    image,
+    isInline,
+    pdfFunctionFactory: this._pdfFunctionFactory,
+    globalColorSpaceCache: this.globalColorSpaceCache,
+    localColorSpaceCache,
+    colorFilterConfig,  // ← 传递配置
+  });
+  // ...
+}
+```
+
+#### 7. getOperatorList 调用 buildPaintImageXObject 修改（`src/core/evaluator.js`）
+
+**修改位置**：两处调用点
+
+- **第1899-1907行**：XObject图像处理路径
+- **第1962-1971行**：内联图像处理路径
+
+**关键代码**：
+
+```javascript
+self.buildPaintImageXObject({
+  resources,
+  image: xobj,
+  operatorList,
+  cacheKey: name,
+  localImageCache,
+  localColorSpaceCache,
+  colorFilterConfig, // ← 传递配置
+});
+```
+
+### 完整调用链
+
+修复后的图像颜色过滤调用链：
+
+```
+getOperatorList({ colorFilterConfig })
+  ↓
+buildPaintImageXObject({ colorFilterConfig })
+  ↓
+new PDFImage({ colorFilterConfig })
+  ↓
+createImageData()
+  ↓
+fillRgb(..., colorFilterConfig)
+  ↓
+getRgbBuffer(..., colorFilterConfig)
+  ↓
+IccColorSpace.getRgbBuffer / DeviceCmykCS.getRgbBuffer / AlternateCS.getRgbBuffer
+  ↓
+colorFilterConfig.filterCMYK() / colorFilterConfig.filterSpot()
+  ↓
+图像颜色正确过滤
+```
+
+### 修复验证
+
+修复后，图像颜色过滤功能正常工作：
+
+1. **CMYK图像过滤**：隐藏/显示C、M、Y、K通道时，图像颜色正确变化
+2. **专色图像过滤**：隐藏/显示专色时，图像正确显示/隐藏
+3. **混合场景**：同时包含CMYK图像、专色图像和矢量图形的PDF，所有元素都正确应用过滤
+
+### 相关文件
+
+- `src/core/colorspace.js`：`fillRgb` 方法修改（基类和DeviceRgbaCS）
+- `src/core/icc_colorspace.js`：已验证正确实现
+- `src/core/image.js`：`PDFImage` 构造函数和 `createImageData` 方法修改
+- `src/core/evaluator.js`：`buildPaintImageXObject` 方法和调用点修改
+
+### 代码统计
+
+- **新增代码**：约30行（参数传递）
+- **修改代码**：约15行（方法签名）
+- **涉及文件**：4个核心文件
+- **修改位置**：约10处
+
+---
+
+**修复完成时间**：2025年12月  
+**重构版本**：方案D v1.2（包含图像颜色过滤修复）  
+**重构状态**：✅ 已完成（矢量图形、文字和图像的颜色过滤均正常工作）

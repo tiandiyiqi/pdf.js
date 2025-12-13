@@ -89,8 +89,10 @@ class PDFImage {
     pdfFunctionFactory,
     globalColorSpaceCache,
     localColorSpaceCache,
+    colorFilterConfig = null,
   }) {
     this.image = image;
+    this.colorFilterConfig = colorFilterConfig;
     const dict = image.dict;
 
     const filter = dict.get("F", "Filter");
@@ -282,6 +284,7 @@ class PDFImage {
         pdfFunctionFactory,
         globalColorSpaceCache,
         localColorSpaceCache,
+        colorFilterConfig,
       });
     } else if (mask) {
       if (mask instanceof BaseStream) {
@@ -303,6 +306,7 @@ class PDFImage {
             pdfFunctionFactory,
             globalColorSpaceCache,
             localColorSpaceCache,
+            colorFilterConfig,
           });
         }
       } else {
@@ -324,6 +328,7 @@ class PDFImage {
     pdfFunctionFactory,
     globalColorSpaceCache,
     localColorSpaceCache,
+    colorFilterConfig = null,
   }) {
     const imageData = image;
     let smaskData = null;
@@ -356,6 +361,7 @@ class PDFImage {
       pdfFunctionFactory,
       globalColorSpaceCache,
       localColorSpaceCache,
+      colorFilterConfig,
     });
   }
 
@@ -924,7 +930,8 @@ class PDFImage {
       actualHeight,
       bpc,
       comps,
-      alpha01
+      alpha01,
+      this.colorFilterConfig
     );
     if (maybeUndoPreblend) {
       this.undoPreblend(data, drawWidth, actualHeight);

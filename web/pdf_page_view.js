@@ -719,10 +719,12 @@ class PDFPageView extends BasePDFPageView {
       // 如果颜色过滤器配置发生变化，且页面已经初始化（有pdfPage），需要重置并重新渲染
       if (previousPromise !== colorFilterConfigPromise && this.pdfPage) {
         console.log(
-          `[PDFPageView] 页面${this.id} 清除operatorList缓存并触发重新渲染`
+          `[PDFPageView] 页面${this.id} colorFilterConfig变化，清除缓存并触发重新渲染`
         );
 
-        // 清除 operatorList 缓存（关键！）
+        // 清除 operatorList 缓存和对象缓存（包括图像数据）
+        // 注意：图像缓存的清除主要在app.js的pdfDocument.cleanup()中完成
+        // 这里的cleanup()清除页面级别的缓存
         this.pdfPage.cleanup();
 
         // 重置页面状态，触发重新渲染
