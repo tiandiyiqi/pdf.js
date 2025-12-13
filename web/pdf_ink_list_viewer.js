@@ -41,8 +41,8 @@ class PDFInkListViewer extends BaseTreeViewer {
     this._lastRenderTime = 0; // 上次渲染时间戳，用于防抖
     this.RENDER_DEBOUNCE_DELAY = 100; // 渲染防抖延迟（毫秒）
 
-    // 持久化的油墨可见性状态（跨文档重新加载保持）
-    this.inkVisibilityState = new Map(); // Map<inkName, visible>
+    // 持久化的油墨可见性状态（跨文档重新加载保持，按页面存储）
+    this.inkVisibilityState = new Map(); // Map<pageNumber, Map<inkName, visible>>
 
     // 监听页面渲染事件和页面切换事件
     this._handlePageRendered = this._handlePageRendered.bind(this);
@@ -198,6 +198,32 @@ class PDFInkListViewer extends BaseTreeViewer {
   }
 
   /**
+   * 获取当前页面的油墨可见性状态Map
+   */
+  _getPageVisibilityState(pageNumber) {
+    if (!this.inkVisibilityState.has(pageNumber)) {
+      this.inkVisibilityState.set(pageNumber, new Map());
+    }
+    return this.inkVisibilityState.get(pageNumber);
+  }
+
+  /**
+   * 获取指定油墨在当前页面的可见性状态
+   */
+  _getInkVisibility(pageNumber, inkName, defaultValue = true) {
+    const pageState = this._getPageVisibilityState(pageNumber);
+    return pageState.has(inkName) ? pageState.get(inkName) : defaultValue;
+  }
+
+  /**
+   * 设置指定油墨在当前页面的可见性状态
+   */
+  _setInkVisibility(pageNumber, inkName, visible) {
+    const pageState = this._getPageVisibilityState(pageNumber);
+    pageState.set(inkName, visible);
+  }
+
+  /**
    * Update ink list from current page color state
    */
   _updateInkListFromCurrentPage() {
@@ -217,73 +243,79 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     this._renderTimeout = setTimeout(() => {
       try {
-        // 从持久化存储中恢复可见性状态（优先使用持久化状态）
-        const currentVisibility = {};
-        for (const ink of this.inks) {
-          // 优先使用持久化存储中的状态，如果没有则使用当前状态
-          currentVisibility[ink.name] = this.inkVisibilityState.has(ink.name)
-            ? this.inkVisibilityState.get(ink.name)
-            : ink.visible;
-        }
+        // 从持久化存储中恢复当前页面的可见性状态
+        const pageState = this._getPageVisibilityState(this.currentPageNumber);
 
         // 清空当前油墨列表
         this.inks = [];
         this.nextId = 1;
 
-        // 添加默认的CMYK组和通道，从持久化存储恢复可见性状态
+        // 添加默认的CMYK组和通道，从当前页面的持久化存储恢复可见性状态
         this.inks.push(
           {
             id: this.nextId++,
             name: "CMYK",
             color: "#000000",
-            visible: this.inkVisibilityState.has("CMYK")
-              ? this.inkVisibilityState.get("CMYK")
-              : true,
+            visible: this._getInkVisibility(
+              this.currentPageNumber,
+              "CMYK",
+              true
+            ),
             isGroup: true,
           },
           {
             id: this.nextId++,
             name: "青色",
             color: "#00A0E9",
-            visible: this.inkVisibilityState.has("青色")
-              ? this.inkVisibilityState.get("青色")
-              : true,
+            visible: this._getInkVisibility(
+              this.currentPageNumber,
+              "青色",
+              true
+            ),
             isGroup: false,
           },
           {
             id: this.nextId++,
             name: "洋红色",
             color: "#E4007F",
-            visible: this.inkVisibilityState.has("洋红色")
-              ? this.inkVisibilityState.get("洋红色")
-              : true,
+            visible: this._getInkVisibility(
+              this.currentPageNumber,
+              "洋红色",
+              true
+            ),
             isGroup: false,
           },
           {
             id: this.nextId++,
             name: "黄色",
             color: "#FFF100",
-            visible: this.inkVisibilityState.has("黄色")
-              ? this.inkVisibilityState.get("黄色")
-              : true,
+            visible: this._getInkVisibility(
+              this.currentPageNumber,
+              "黄色",
+              true
+            ),
             isGroup: false,
           },
           {
             id: this.nextId++,
             name: "黑色",
             color: "#231815",
-            visible: this.inkVisibilityState.has("黑色")
-              ? this.inkVisibilityState.get("黑色")
-              : true,
+            visible: this._getInkVisibility(
+              this.currentPageNumber,
+              "黑色",
+              true
+            ),
             isGroup: false,
           }
         );
 
-        // 添加当前页面的专色，从持久化存储恢复可见性状态
+        // 添加当前页面的专色，从当前页面的持久化存储恢复可见性状态
         for (const colorInfo of currentState.colors) {
-          const visible = this.inkVisibilityState.has(colorInfo.name)
-            ? this.inkVisibilityState.get(colorInfo.name)
-            : colorInfo.visible;
+          const visible = this._getInkVisibility(
+            this.currentPageNumber,
+            colorInfo.name,
+            colorInfo.visible
+          );
 
           this._addSpotColorToInkList(colorInfo.name, visible, colorInfo.value);
         }
@@ -350,6 +382,113 @@ class PDFInkListViewer extends BaseTreeViewer {
   }
 
   /**
+   * Create control buttons row (全部显示/全部隐藏)
+   */
+  _createControlButtonsRow() {
+    const controlRow = document.createElement("div");
+    controlRow.className = "inkControlRow";
+
+    // 全部显示按钮
+    const showAllButton = document.createElement("div");
+    showAllButton.className = "inkControlButton";
+    showAllButton.textContent = "全部显示";
+    showAllButton.addEventListener("click", () => {
+      this._showAllInks();
+    });
+
+    // 全部隐藏按钮
+    const hideAllButton = document.createElement("div");
+    hideAllButton.className = "inkControlButton";
+    hideAllButton.textContent = "全部隐藏";
+    hideAllButton.addEventListener("click", () => {
+      this._hideAllInks();
+    });
+
+    controlRow.append(showAllButton);
+    controlRow.append(hideAllButton);
+
+    return controlRow;
+  }
+
+  /**
+   * 显示所有油墨（仅作用于当前页面）
+   */
+  _showAllInks() {
+    // this.inks 只包含当前页面的油墨，所以只更新当前页面的状态
+    for (const ink of this.inks) {
+      ink.visible = true;
+      // 保存到当前页面的持久化存储（只影响当前页面）
+      this._setInkVisibility(this.currentPageNumber, ink.name, true);
+      // 更新眼睛图标
+      const eyeIcon = this.eyeIcons[ink.name];
+      if (eyeIcon) {
+        eyeIcon.classList.remove("eyeHidden");
+        eyeIcon.classList.add("eyeVisible");
+      }
+      // 更新ColorConverter（用于当前页面的过滤）
+      const channelNameMap = {
+        青色: "Cyan",
+        洋红色: "Magenta",
+        黄色: "Yellow",
+        黑色: "Black",
+      };
+      const colorConverterName = channelNameMap[ink.name] || ink.name;
+      ColorConverter.updateColorState(colorConverterName, true);
+    }
+
+    // 更新CMYK组图标状态
+    this.updateCMYKGroupVisibility();
+
+    // 触发 inkstatechanged 事件（会重新加载文档，但只影响当前页面的显示）
+    console.log(
+      `[PDFInkListViewer] 全部显示（页面${this.currentPageNumber}）- 触发 inkstatechanged 事件`
+    );
+    this.eventBus.dispatch("inkstatechanged", {
+      source: this,
+      inks: this.inks,
+    });
+  }
+
+  /**
+   * 隐藏所有油墨（仅作用于当前页面）
+   */
+  _hideAllInks() {
+    // this.inks 只包含当前页面的油墨，所以只更新当前页面的状态
+    for (const ink of this.inks) {
+      ink.visible = false;
+      // 保存到当前页面的持久化存储（只影响当前页面）
+      this._setInkVisibility(this.currentPageNumber, ink.name, false);
+      // 更新眼睛图标
+      const eyeIcon = this.eyeIcons[ink.name];
+      if (eyeIcon) {
+        eyeIcon.classList.remove("eyeVisible");
+        eyeIcon.classList.add("eyeHidden");
+      }
+      // 更新ColorConverter（用于当前页面的过滤）
+      const channelNameMap = {
+        青色: "Cyan",
+        洋红色: "Magenta",
+        黄色: "Yellow",
+        黑色: "Black",
+      };
+      const colorConverterName = channelNameMap[ink.name] || ink.name;
+      ColorConverter.updateColorState(colorConverterName, false);
+    }
+
+    // 更新CMYK组图标状态
+    this.updateCMYKGroupVisibility();
+
+    // 触发 inkstatechanged 事件（会重新加载文档，但只影响当前页面的显示）
+    console.log(
+      `[PDFInkListViewer] 全部隐藏（页面${this.currentPageNumber}）- 触发 inkstatechanged 事件`
+    );
+    this.eventBus.dispatch("inkstatechanged", {
+      source: this,
+      inks: this.inks,
+    });
+  }
+
+  /**
    * Render only the current page's inks
    */
   _renderCurrentPageInks() {
@@ -363,6 +502,10 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     // Create fragment for better performance
     const fragment = document.createDocumentFragment();
+
+    // Add control buttons row first
+    const controlRow = this._createControlButtonsRow();
+    this.inksContainer.append(controlRow);
 
     // Add only current page's inks
     for (const ink of this.inks) {
@@ -524,8 +667,8 @@ class PDFInkListViewer extends BaseTreeViewer {
         ink.visible = !ink.visible;
         const allVisible = ink.visible;
 
-        // 保存状态到持久化存储
-        this.inkVisibilityState.set("CMYK", allVisible);
+        // 保存状态到当前页面的持久化存储
+        this._setInkVisibility(this.currentPageNumber, "CMYK", allVisible);
 
         // 更新CMYK组图标状态
         eyeIcon.classList.toggle("eyeHidden", !allVisible);
@@ -545,8 +688,12 @@ class PDFInkListViewer extends BaseTreeViewer {
 
           if (channelInk && channelEyeIcon) {
             channelInk.visible = allVisible;
-            // 保存状态到持久化存储
-            this.inkVisibilityState.set(channelName, allVisible);
+            // 保存状态到当前页面的持久化存储
+            this._setInkVisibility(
+              this.currentPageNumber,
+              channelName,
+              allVisible
+            );
             channelEyeIcon.classList.toggle("eyeHidden", !allVisible);
             channelEyeIcon.classList.toggle("eyeVisible", allVisible);
             ColorConverter.updateColorState(colorConverterName, allVisible);
@@ -565,8 +712,8 @@ class PDFInkListViewer extends BaseTreeViewer {
         // 单个通道或专色点击事件
         ink.visible = !ink.visible;
 
-        // 保存状态到持久化存储
-        this.inkVisibilityState.set(ink.name, ink.visible);
+        // 保存状态到当前页面的持久化存储
+        this._setInkVisibility(this.currentPageNumber, ink.name, ink.visible);
 
         // 更新当前图标状态
         eyeIcon.classList.toggle("eyeHidden", !ink.visible);
@@ -633,8 +780,12 @@ class PDFInkListViewer extends BaseTreeViewer {
 
       // 更新组图标的状态
       cmykGroupInk.visible = allChannelsVisible;
-      // 更新持久化存储
-      this.inkVisibilityState.set("CMYK", allChannelsVisible);
+      // 更新当前页面的持久化存储
+      this._setInkVisibility(
+        this.currentPageNumber,
+        "CMYK",
+        allChannelsVisible
+      );
       cmykGroupEyeIcon.classList.toggle("eyeHidden", anyChannelInvisible);
       cmykGroupEyeIcon.classList.toggle("eyeVisible", allChannelsVisible);
     }
@@ -654,60 +805,56 @@ class PDFInkListViewer extends BaseTreeViewer {
       this.inks = [];
       this.nextId = 1;
 
-      // 添加默认的CMYK组和通道，从持久化存储恢复可见性状态
+      // 添加默认的CMYK组和通道，从当前页面的持久化存储恢复可见性状态
       this.inks.push(
         {
           id: this.nextId++,
           name: "CMYK",
           color: "#000000",
-          visible: this.inkVisibilityState.has("CMYK")
-            ? this.inkVisibilityState.get("CMYK")
-            : true,
+          visible: this._getInkVisibility(this.currentPageNumber, "CMYK", true),
           isGroup: true,
         },
         {
           id: this.nextId++,
           name: "青色",
           color: "#00A0E9",
-          visible: this.inkVisibilityState.has("青色")
-            ? this.inkVisibilityState.get("青色")
-            : true,
+          visible: this._getInkVisibility(this.currentPageNumber, "青色", true),
           isGroup: false,
         },
         {
           id: this.nextId++,
           name: "洋红色",
           color: "#E4007F",
-          visible: this.inkVisibilityState.has("洋红色")
-            ? this.inkVisibilityState.get("洋红色")
-            : true,
+          visible: this._getInkVisibility(
+            this.currentPageNumber,
+            "洋红色",
+            true
+          ),
           isGroup: false,
         },
         {
           id: this.nextId++,
           name: "黄色",
           color: "#FFF100",
-          visible: this.inkVisibilityState.has("黄色")
-            ? this.inkVisibilityState.get("黄色")
-            : true,
+          visible: this._getInkVisibility(this.currentPageNumber, "黄色", true),
           isGroup: false,
         },
         {
           id: this.nextId++,
           name: "黑色",
           color: "#231815",
-          visible: this.inkVisibilityState.has("黑色")
-            ? this.inkVisibilityState.get("黑色")
-            : true,
+          visible: this._getInkVisibility(this.currentPageNumber, "黑色", true),
           isGroup: false,
         }
       );
 
-      // 添加当前页面的专色，从持久化存储恢复可见性状态
+      // 添加当前页面的专色，从当前页面的持久化存储恢复可见性状态
       for (const colorInfo of currentState.colors) {
-        const visible = this.inkVisibilityState.has(colorInfo.name)
-          ? this.inkVisibilityState.get(colorInfo.name)
-          : colorInfo.visible;
+        const visible = this._getInkVisibility(
+          this.currentPageNumber,
+          colorInfo.name,
+          colorInfo.visible
+        );
         this._addSpotColorToInkList(colorInfo.name, visible, colorInfo.value);
       }
 
@@ -731,52 +878,58 @@ class PDFInkListViewer extends BaseTreeViewer {
     const hasBlack = "Black" in colorConfig.colors;
     const hasCmyk = hasCyan && hasMagenta && hasYellow && hasBlack;
 
-    // 添加CMYK组和通道，优先使用持久化状态
+    // 添加CMYK组和通道，优先使用当前页面的持久化状态
     if (hasCmyk) {
       inks.push(
         {
           id: nextId++,
           name: "CMYK",
           color: "#000000",
-          visible: this.inkVisibilityState.has("CMYK")
-            ? this.inkVisibilityState.get("CMYK")
-            : true,
+          visible: this._getInkVisibility(this.currentPageNumber, "CMYK", true),
           isGroup: true,
         },
         {
           id: nextId++,
           name: "青色",
           color: "#00A0E9",
-          visible: this.inkVisibilityState.has("青色")
-            ? this.inkVisibilityState.get("青色")
-            : colorConfig.colors.Cyan !== false,
+          visible: this._getInkVisibility(
+            this.currentPageNumber,
+            "青色",
+            colorConfig.colors.Cyan !== false
+          ),
           isGroup: false,
         },
         {
           id: nextId++,
           name: "洋红色",
           color: "#E4007F",
-          visible: this.inkVisibilityState.has("洋红色")
-            ? this.inkVisibilityState.get("洋红色")
-            : colorConfig.colors.Magenta !== false,
+          visible: this._getInkVisibility(
+            this.currentPageNumber,
+            "洋红色",
+            colorConfig.colors.Magenta !== false
+          ),
           isGroup: false,
         },
         {
           id: nextId++,
           name: "黄色",
           color: "#FFF100",
-          visible: this.inkVisibilityState.has("黄色")
-            ? this.inkVisibilityState.get("黄色")
-            : colorConfig.colors.Yellow !== false,
+          visible: this._getInkVisibility(
+            this.currentPageNumber,
+            "黄色",
+            colorConfig.colors.Yellow !== false
+          ),
           isGroup: false,
         },
         {
           id: nextId++,
           name: "黑色",
           color: "#231815",
-          visible: this.inkVisibilityState.has("黑色")
-            ? this.inkVisibilityState.get("黑色")
-            : colorConfig.colors.Black !== false,
+          visible: this._getInkVisibility(
+            this.currentPageNumber,
+            "黑色",
+            colorConfig.colors.Black !== false
+          ),
           isGroup: false,
         }
       );
@@ -804,10 +957,12 @@ class PDFInkListViewer extends BaseTreeViewer {
         this.spotColorMap.set(colorName, color);
       }
 
-      // 优先使用持久化状态，如果没有则使用 ColorConverter 中的可见性状态
-      const actualVisible = this.inkVisibilityState.has(colorName)
-        ? this.inkVisibilityState.get(colorName)
-        : visible !== false;
+      // 优先使用当前页面的持久化状态，如果没有则使用 ColorConverter 中的可见性状态
+      const actualVisible = this._getInkVisibility(
+        this.currentPageNumber,
+        colorName,
+        visible !== false
+      );
 
       inks.push({
         id: nextId++,
@@ -826,6 +981,10 @@ class PDFInkListViewer extends BaseTreeViewer {
     // Create inks container
     this.inksContainer = document.createElement("div");
     this.inksContainer.className = "inksContainer";
+
+    // Add control buttons row first
+    const controlRow = this._createControlButtonsRow();
+    this.inksContainer.append(controlRow);
 
     // Add inks
     for (const ink of this.inks) {

@@ -1774,6 +1774,47 @@ dialog :link {
   padding: 0;
 }
 
+.inkControlRow {
+  display: flex;
+  align-items: center;
+  padding: 2px 0 5px;
+  padding-inline-start: 4px;
+  width: calc(100% - 4px);
+  box-sizing: border-box;
+  border-radius: 2px;
+  color: var(--treeitem-color);
+  font-size: 13px;
+  line-height: 15px;
+  user-select: none;
+  white-space: normal;
+  margin-bottom: 1px;
+  border-bottom: none;
+  min-height: auto;
+}
+
+.inkControlButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.inkControlButton:hover {
+  background-color: var(--treeitem-bg-color);
+  color: var(--treeitem-hover-color);
+}
+
+.inkControlButton:active {
+  background-color: var(--treeitem-selected-bg-color);
+  color: var(--treeitem-selected-color);
+}
+
 .inkItem {
   display: flex;
   align-items: center;
