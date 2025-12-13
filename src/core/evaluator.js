@@ -1842,11 +1842,15 @@ class PartialEvaluator {
             name = args[0].name;
 
             if (isValidName) {
-              const localImage = localImageCache.getByName(name);
-              if (localImage) {
-                addCachedImageOps(operatorList, localImage);
-                args = null;
-                continue;
+              // 注意：当colorFilterConfig存在时，跳过本地缓存检查
+              // 这样可以确保使用新的颜色过滤配置重新生成图像
+              if (!colorFilterConfig) {
+                const localImage = localImageCache.getByName(name);
+                if (localImage) {
+                  addCachedImageOps(operatorList, localImage);
+                  args = null;
+                  continue;
+                }
               }
             }
 
@@ -1858,14 +1862,18 @@ class PartialEvaluator {
 
                 let xobj = xobjs.getRaw(name);
                 if (xobj instanceof Ref) {
-                  const cachedImage =
-                    localImageCache.getByRef(xobj) ||
-                    self._regionalImageCache.getByRef(xobj) ||
-                    self.globalImageCache.getData(xobj, self.pageIndex);
-                  if (cachedImage) {
-                    addCachedImageOps(operatorList, cachedImage);
-                    resolveXObject();
-                    return;
+                  // 注意：当colorFilterConfig存在时，跳过缓存检查
+                  // 这样可以确保使用新的颜色过滤配置重新生成图像
+                  if (!colorFilterConfig) {
+                    const cachedImage =
+                      localImageCache.getByRef(xobj) ||
+                      self._regionalImageCache.getByRef(xobj) ||
+                      self.globalImageCache.getData(xobj, self.pageIndex);
+                    if (cachedImage) {
+                      addCachedImageOps(operatorList, cachedImage);
+                      resolveXObject();
+                      return;
+                    }
                   }
 
                   xobj = xref.fetch(xobj);

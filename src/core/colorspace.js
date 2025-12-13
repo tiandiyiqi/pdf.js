@@ -496,13 +496,6 @@ class AlternateCS extends ColorSpace {
 
   // 专色的颜色转换为RGB
   getRgbItem(src, srcOffset, dest, destOffset, colorFilterConfig = null) {
-    console.log(
-      `[AlternateCS.getRgbItem] 调用，colorFilterConfig:`,
-      !!colorFilterConfig,
-      `通道:`,
-      this.channelNames
-    );
-
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         dest instanceof Uint8ClampedArray,

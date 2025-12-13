@@ -828,7 +828,12 @@ class PDFImage {
               isHandled = true;
               break;
             case "DeviceCMYK":
-              isHandled = true;
+            case "Alternate": // 专色也需要颜色过滤
+              // 如果启用了颜色过滤，不走快速路径，强制走fillRgb()流程
+              // 因为forceRGBA会让JPEG解码器直接转换，跳过颜色过滤
+              if (!this.colorFilterConfig || !this.colorFilterConfig.enabled) {
+                isHandled = true;
+              }
               break;
           }
 
@@ -855,7 +860,9 @@ class PDFImage {
               imageLength *= 3;
             /* falls through */
             case "DeviceRGB":
-            case "DeviceCMYK":
+              // 注释：移除DeviceCMYK的快速路径，让CMYK图像走正常的fillRgb()流程
+              // 以确保颜色过滤（ColorFilterConfig）被正确应用
+              // case "DeviceCMYK":
               imgData.kind = ImageKind.RGB_24BPP;
               imgData.data = await this.getImageBytes(imageLength, {
                 drawWidth,
@@ -1042,6 +1049,19 @@ class PDFImage {
   }
 
   async #getImage(width, height) {
+    // 如果启用了颜色过滤，禁用原生解码（ImageDecoder）
+    // 因为原生解码跳过了PDF.js的颜色空间转换系统，无法应用颜色过滤
+    // 影响的颜色空间：DeviceCMYK, Alternate（专色）
+    if (this.colorFilterConfig && this.colorFilterConfig.enabled) {
+      const needsColorFiltering =
+        this.colorSpace.name === "DeviceCMYK" ||
+        this.colorSpace.name === "Alternate";
+
+      if (needsColorFiltering) {
+        return null; // 返回null，强制走fillRgb()流程以应用颜色过滤
+      }
+    }
+
     const bitmap = await this.image.getTransferableImage();
     if (!bitmap) {
       return null;
