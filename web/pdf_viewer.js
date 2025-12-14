@@ -2077,7 +2077,13 @@ class PDFViewer {
     }
     this._colorFilterConfigPromise = promise;
 
-    this.refresh(false, { colorFilterConfigPromise: promise });
+    // 只刷新当前页面，避免全局刷新导致闪烁
+    const currentPageView = this._pages[this._currentPageNumber - 1];
+    if (currentPageView) {
+      currentPageView.update({ colorFilterConfigPromise: promise });
+      // 立即触发渲染，确保页面立即更新
+      this.update();
+    }
   }
 
   /**
