@@ -162,11 +162,12 @@ class PDFInkListViewer extends BaseTreeViewer {
     // 提取当前页面的专色信息
     // spotColors 可能是 Set 或 Array
     if (opList.spotColors) {
-      const spotColorsArray = Array.isArray(opList.spotColors)
-        ? opList.spotColors
-        : opList.spotColors instanceof Set
-          ? Array.from(opList.spotColors)
-          : [];
+      let spotColorsArray = [];
+      if (Array.isArray(opList.spotColors)) {
+        spotColorsArray = opList.spotColors;
+      } else if (opList.spotColors instanceof Set) {
+        spotColorsArray = Array.from(opList.spotColors);
+      }
 
       for (const spotName of spotColorsArray) {
         const spotColor =
@@ -218,9 +219,6 @@ class PDFInkListViewer extends BaseTreeViewer {
   _triggerCurrentPageColorFilter() {
     // 基于当前页面的可见性状态创建一个新的ColorFilterConfig
     const pageConfig = new ColorFilterConfig();
-    const pageVisibilityState = this._getPageVisibilityState(
-      this.currentPageNumber
-    );
 
     // 初始化CMYK通道
     const channelNameMap = {
@@ -406,9 +404,6 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     this._renderTimeout = setTimeout(() => {
       try {
-        // 从持久化存储中恢复当前页面的可见性状态
-        const pageState = this._getPageVisibilityState(this.currentPageNumber);
-
         // 清空当前油墨列表
         this.inks = [];
         this.nextId = 1;
@@ -777,6 +772,7 @@ class PDFInkListViewer extends BaseTreeViewer {
     // Create ink item container
     const inkItem = document.createElement("div");
     inkItem.className = `inkItem ${ink.isGroup ? "inkGroup" : ""}`;
+    inkItem.title = "Ctrl+Click: 单色/全色切换";
 
     // Create eye icon container
     const eyeContainer = document.createElement("div");
@@ -816,8 +812,13 @@ class PDFInkListViewer extends BaseTreeViewer {
     colorName.textContent = ink.name;
 
     // Bind click event to entire ink item row
-    inkItem.addEventListener("click", () => {
-      if (ink.name === "CMYK" && ink.isGroup) {
+    inkItem.addEventListener("click", event => {
+      const isCtrlClick = event.ctrlKey || event.metaKey;
+
+      if (isCtrlClick) {
+        // Ctrl/Command + 点击：切换独显模式
+        this._handleCtrlClick(ink, event);
+      } else if (ink.name === "CMYK" && ink.isGroup) {
         // CMYK组图标点击事件
         ink.visible = !ink.visible;
         const allVisible = ink.visible;
@@ -1148,6 +1149,68 @@ class PDFInkListViewer extends BaseTreeViewer {
 
     // Update DOM
     this._finishRendering(fragment, this.inks.length, false);
+  }
+
+  /**
+   * 处理Ctrl/Command点击事件：切换独显模式
+   */
+  _handleCtrlClick(targetInk, event) {
+    // 检查当前是否是独显模式（只有一个油墨可见）
+    const visibleInks = this.inks.filter(ink => ink.visible);
+    const isSoloMode = visibleInks.length === 1 && visibleInks[0] === targetInk;
+
+    if (isSoloMode) {
+      // 当前是独显模式：退出独显，显示所有油墨
+      this._showAllInks();
+    } else {
+      // 当前不是独显模式：进入独显，只显示目标油墨
+      this._showOnlyTargetInk(targetInk);
+    }
+  }
+
+  /**
+   * 只显示目标油墨，隐藏其他所有油墨
+   */
+  _showOnlyTargetInk(targetInk) {
+    // 隐藏所有油墨，只显示目标油墨
+    for (const ink of this.inks) {
+      const isTarget = ink === targetInk;
+      ink.visible = isTarget;
+
+      // 更新眼睛图标
+      const eyeIcon = this.eyeIcons[ink.name];
+      if (eyeIcon) {
+        if (isTarget) {
+          eyeIcon.classList.remove("eyeHidden");
+          eyeIcon.classList.add("eyeVisible");
+        } else {
+          eyeIcon.classList.remove("eyeVisible");
+          eyeIcon.classList.add("eyeHidden");
+        }
+      }
+
+      // 保存状态到当前页面的持久化存储
+      this._setInkVisibility(this.currentPageNumber, ink.name, isTarget);
+
+      // 更新ColorFilterConfig（方案D）
+      const channelNameMap = {
+        青色: "Cyan",
+        洋红色: "Magenta",
+        黄色: "Yellow",
+        黑色: "Black",
+      };
+      const colorConverterName = channelNameMap[ink.name] || ink.name;
+      this._colorFilterConfig.setVisibility(colorConverterName, isTarget);
+
+      // 保持向后兼容：同时更新ColorConverter
+      ColorConverter.updateColorState(colorConverterName, isTarget);
+    }
+
+    // 更新CMYK组图标状态
+    this.updateCMYKGroupVisibility();
+
+    // 触发当前页面的颜色过滤更新
+    this._triggerCurrentPageColorFilter();
   }
 }
 
