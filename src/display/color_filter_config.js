@@ -215,6 +215,25 @@ class ColorFilterConfig {
 
     return true;
   }
+
+  /**
+   * 检查是否所有颜色都隐藏（完全空白状态）
+   * @returns {boolean}
+   */
+  isAllHidden() {
+    if (!this.#enabled) {
+      return false;
+    }
+
+    // 检查所有注册的颜色是否都不可见
+    for (const [colorName, visible] of this.#colors.entries()) {
+      if (visible !== false) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }
 
 export { ColorFilterConfig };

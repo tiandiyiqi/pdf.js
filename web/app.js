@@ -2318,6 +2318,30 @@ const PDFViewerApplication = {
     eventBus._on(
       "colorfilterconfig",
       evt => {
+        // 如果是预缓存操作，只触发指定页面的 Worker 端渲染，不刷新显示
+        if (evt.isPreCache && evt.pageNumber) {
+          console.log(
+            `[app.js] 收到预缓存事件（页面${evt.pageNumber}），触发 Worker 端渲染`
+          );
+          const pageView = pdfViewer._pages[evt.pageNumber - 1];
+          if (pageView && pageView.pdfPage) {
+            // 直接调用 getOperatorList，传入 colorFilterConfig，但不触发 canvas 渲染
+            pageView.pdfPage
+              .getOperatorList({
+                intent: "display",
+                cacheKey: `precache_${evt.pageNumber}`,
+                colorFilterConfig: evt.promise,
+              })
+              .then(() => {
+                console.log(`[app.js] 页面${evt.pageNumber}预缓存完成`);
+              })
+              .catch(err => {
+                console.error(`[app.js] 页面${evt.pageNumber}预缓存失败:`, err);
+              });
+          }
+          return;
+        }
+
         console.log(
           `[app.js] 收到colorfilterconfig事件（方案D），设置pdfViewer.colorFilterConfigPromise`
         );

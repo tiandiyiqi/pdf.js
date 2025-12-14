@@ -70,6 +70,9 @@ class PDFInkListViewer extends BaseTreeViewer {
         // 处理页面颜色信息并保存到状态管理
         await this._processPageColors(evt.pageNumber, opList);
 
+        // 页面首次渲染完成后，触发"全部显示"状态的预缓存
+        this._triggerPreCacheForPage(evt.pageNumber, opList);
+
         // 如果是当前活动页面，立即更新油墨清单
         if (evt.pageNumber === this.currentPageNumber) {
           console.log(
@@ -157,8 +160,15 @@ class PDFInkListViewer extends BaseTreeViewer {
     }
 
     // 提取当前页面的专色信息
-    if (opList.spotColors && Array.isArray(opList.spotColors)) {
-      for (const spotName of opList.spotColors) {
+    // spotColors 可能是 Set 或 Array
+    if (opList.spotColors) {
+      const spotColorsArray = Array.isArray(opList.spotColors)
+        ? opList.spotColors
+        : opList.spotColors instanceof Set
+          ? Array.from(opList.spotColors)
+          : [];
+
+      for (const spotName of spotColorsArray) {
         const spotColor =
           pageSpotColorMap.get(spotName) ||
           this.spotColorMap.get(spotName) ||
@@ -249,6 +259,104 @@ class PDFInkListViewer extends BaseTreeViewer {
     this.eventBus.dispatch("colorfilterconfig", {
       source: this,
       promise: Promise.resolve(pageConfig), // 每次都创建新的Promise
+    });
+  }
+
+  /**
+   * 触发页面的预缓存：创建"全部显示"状态的 ColorFilterConfig 并触发一次渲染
+   * @param {number} pageNumber - 页面号
+   * @param {Object} opList - operatorList，包含 spotColors 信息
+   */
+  _triggerPreCacheForPage(pageNumber, opList) {
+    // 确保每个页面只预缓存一次
+    if (!this._preCachedPages) {
+      this._preCachedPages = new Set();
+    }
+
+    if (this._preCachedPages.has(pageNumber)) {
+      console.log(`[PDFInkListViewer] 页面${pageNumber}已预缓存过，跳过`);
+      return; // 已经预缓存过
+    }
+
+    this._preCachedPages.add(pageNumber);
+
+    // 获取页面的专色信息
+    // spotColors 可能是 Set 或 Array
+    let spotColors = opList.spotColors;
+
+    console.log(
+      `[PDFInkListViewer] 页面${pageNumber}预缓存检查: opList.spotColors类型=${typeof spotColors}, 是否为Set=${spotColors instanceof Set}, 是否为Array=${Array.isArray(spotColors)}`
+    );
+
+    if (
+      !spotColors ||
+      (Array.isArray(spotColors) && spotColors.length === 0) ||
+      (spotColors instanceof Set && spotColors.size === 0)
+    ) {
+      console.log(
+        `[PDFInkListViewer] 页面${pageNumber} opList.spotColors 为空，检查 pageColorStates`
+      );
+      // 如果 opList 中没有 spotColors，尝试从 pageColorStates 获取
+      const pageState = this.pageColorStates.get(pageNumber);
+      if (pageState && pageState.colors && pageState.colors.length > 0) {
+        spotColors = new Set(pageState.colors.map(c => c.name));
+        console.log(
+          `[PDFInkListViewer] 从 pageColorStates 获取到专色:`,
+          Array.from(spotColors)
+        );
+      } else {
+        console.log(
+          `[PDFInkListViewer] pageColorStates 中也无专色信息，pageState存在=${!!pageState}, colors存在=${!!(pageState && pageState.colors)}, colors长度=${pageState?.colors?.length || 0}`
+        );
+      }
+    }
+
+    // 统一转换为 Set
+    if (Array.isArray(spotColors)) {
+      spotColors = new Set(spotColors);
+    } else if (!(spotColors instanceof Set)) {
+      spotColors = new Set();
+    }
+
+    if (spotColors.size === 0) {
+      console.log(
+        `[PDFInkListViewer] 页面${pageNumber}无专色（spotColors.size=0），跳过预缓存`
+      );
+      return;
+    }
+
+    console.log(
+      `[PDFInkListViewer] 页面${pageNumber}找到${spotColors.size}个专色:`,
+      Array.from(spotColors)
+    );
+
+    // 创建一个"全部显示"的 ColorFilterConfig
+    const fullVisibleConfig = new ColorFilterConfig({
+      enabled: true,
+      colors: {
+        Cyan: true,
+        Magenta: true,
+        Yellow: true,
+        Black: true,
+      },
+    });
+
+    // 添加所有专色（全部可见）
+    for (const colorName of spotColors) {
+      fullVisibleConfig.setVisibility(colorName, true);
+    }
+
+    const stateKey = fullVisibleConfig.getFilterStateKey();
+    console.log(
+      `[PDFInkListViewer] 触发页面${pageNumber}的预缓存，状态: ${stateKey}`
+    );
+
+    // 触发一次颜色过滤渲染，但标记为预缓存操作
+    this.eventBus.dispatch("colorfilterconfig", {
+      source: this,
+      promise: Promise.resolve(fullVisibleConfig),
+      pageNumber,
+      isPreCache: true, // 标记为预缓存操作
     });
   }
 

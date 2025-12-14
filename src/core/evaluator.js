@@ -656,33 +656,15 @@ class PartialEvaluator {
         args = [];
         operatorList.addImageOps(fn, args, optionalContent);
 
-        // 如果有 colorFilterConfig，保存到 FilteredImageCache
-        if (filterConfigPromise && imageRef) {
-          filterConfigPromise
-            .then(filterConfig => {
-              const filterStateKey = filterConfig.getFilterStateKey();
-
-              // 只缓存非原始状态
-              if (filterStateKey !== "original") {
-                const cacheData = { fn, args, optionalContent };
-                const byteSize = this._estimateImageByteSize(args);
-
-                this.filteredImageCache.setData(
-                  imageRef,
-                  filterStateKey,
-                  cacheData,
-                  byteSize
-                );
-
-                console.log(
-                  `[FilteredImageCache] 保存缓存(SolidColor): 状态=${filterStateKey}, 大小=${byteSize}字节`
-                );
-              }
-            })
-            .catch(err => {
-              console.error("[FilteredImageCache] 保存失败:", err);
-            });
-        }
+        // 保存到 FilteredImageCache（包括预缓存）
+        this._saveToFilteredImageCache(
+          filterConfigPromise,
+          imageRef,
+          fn,
+          args,
+          optionalContent,
+          "(SolidColor)"
+        );
 
         if (cacheKey) {
           const cacheData = { fn, args, optionalContent };
@@ -749,33 +731,15 @@ class PartialEvaluator {
       ];
       operatorList.addImageOps(fn, args, optionalContent);
 
-      // 如果有 colorFilterConfig，保存到 FilteredImageCache
-      if (filterConfigPromise && imageRef) {
-        filterConfigPromise
-          .then(filterConfig => {
-            const filterStateKey = filterConfig.getFilterStateKey();
-
-            // 只缓存非原始状态
-            if (filterStateKey !== "original") {
-              const cacheData = { fn, args, optionalContent };
-              const byteSize = this._estimateImageByteSize(args);
-
-              this.filteredImageCache.setData(
-                imageRef,
-                filterStateKey,
-                cacheData,
-                byteSize
-              );
-
-              console.log(
-                `[FilteredImageCache] 保存缓存(Mask): 状态=${filterStateKey}, 大小=${byteSize}字节`
-              );
-            }
-          })
-          .catch(err => {
-            console.error("[FilteredImageCache] 保存失败:", err);
-          });
-      }
+      // 保存到 FilteredImageCache（包括预缓存）
+      this._saveToFilteredImageCache(
+        filterConfigPromise,
+        imageRef,
+        fn,
+        args,
+        optionalContent,
+        "(Mask)"
+      );
 
       if (cacheKey) {
         const cacheData = { objId, fn, args, optionalContent };
@@ -815,37 +779,15 @@ class PartialEvaluator {
           optionalContent
         );
 
-        // 如果有 colorFilterConfig，保存到 FilteredImageCache
-        if (filterConfigPromise && imageRef) {
-          filterConfigPromise
-            .then(filterConfig => {
-              const filterStateKey = filterConfig.getFilterStateKey();
-
-              // 只缓存非原始状态
-              if (filterStateKey !== "original") {
-                const cacheData = {
-                  fn: OPS.paintInlineImageXObject,
-                  args: [imgData],
-                  optionalContent,
-                };
-                const byteSize = this._estimateImageByteSize([imgData]);
-
-                this.filteredImageCache.setData(
-                  imageRef,
-                  filterStateKey,
-                  cacheData,
-                  byteSize
-                );
-
-                console.log(
-                  `[FilteredImageCache] 保存缓存(Inline): 状态=${filterStateKey}, 大小=${byteSize}字节`
-                );
-              }
-            })
-            .catch(err => {
-              console.error("[FilteredImageCache] 保存失败:", err);
-            });
-        }
+        // 保存到 FilteredImageCache（包括预缓存）
+        this._saveToFilteredImageCache(
+          filterConfigPromise,
+          imageRef,
+          OPS.paintInlineImageXObject,
+          [imgData],
+          optionalContent,
+          "(Inline)"
+        );
       } catch (reason) {
         const msg = `Unable to decode inline image: "${reason}".`;
 
@@ -885,33 +827,14 @@ class PartialEvaluator {
     args = [objId, w, h];
     operatorList.addImageOps(fn, args, optionalContent, hasMask);
 
-    // 如果有 colorFilterConfig，保存到 FilteredImageCache
-    if (filterConfigPromise && imageRef) {
-      filterConfigPromise
-        .then(filterConfig => {
-          const filterStateKey = filterConfig.getFilterStateKey();
-
-          // 只缓存非原始状态
-          if (filterStateKey !== "original") {
-            const cacheData = { fn, args, optionalContent };
-            const byteSize = this._estimateImageByteSize(args);
-
-            this.filteredImageCache.setData(
-              imageRef,
-              filterStateKey,
-              cacheData,
-              byteSize
-            );
-
-            console.log(
-              `[FilteredImageCache] 保存缓存: 状态=${filterStateKey}, 大小=${byteSize}字节`
-            );
-          }
-        })
-        .catch(err => {
-          console.error("[FilteredImageCache] 保存失败:", err);
-        });
-    }
+    // 保存到 FilteredImageCache（包括预缓存）
+    this._saveToFilteredImageCache(
+      filterConfigPromise,
+      imageRef,
+      fn,
+      args,
+      optionalContent
+    );
 
     if (cacheGlobally) {
       globalCacheData = {
@@ -1026,6 +949,52 @@ class PartialEvaluator {
 
     // 默认返回一个保守估计值
     return 10000; // 10KB
+  }
+
+  /**
+   * 保存图像到 FilteredImageCache
+   * @param {Object} filterConfigPromise - 颜色过滤配置Promise
+   * @param {Object} imageRef - 图像引用
+   * @param {number} fn - 操作函数
+   * @param {Array} args - 操作参数
+   * @param {Object} optionalContent - 可选内容
+   * @param {string} label - 日志标签
+   */
+  _saveToFilteredImageCache(
+    filterConfigPromise,
+    imageRef,
+    fn,
+    args,
+    optionalContent,
+    label = ""
+  ) {
+    if (!imageRef || !this.filteredImageCache || !filterConfigPromise) {
+      return;
+    }
+
+    const cacheData = { fn, args, optionalContent };
+    const byteSize = this._estimateImageByteSize(args);
+
+    // 保存对应颜色过滤状态的缓存
+    filterConfigPromise
+      .then(filterConfig => {
+        const filterStateKey = filterConfig.getFilterStateKey();
+
+        // 缓存所有状态（包括原始状态）
+        this.filteredImageCache.setData(
+          imageRef,
+          filterStateKey,
+          cacheData,
+          byteSize
+        );
+
+        console.log(
+          `[FilteredImageCache] 保存缓存${label}: 状态=${filterStateKey}, 大小=${byteSize}字节`
+        );
+      })
+      .catch(err => {
+        console.error("[FilteredImageCache] 保存失败:", err);
+      });
   }
 
   handleSMask(
@@ -1955,6 +1924,52 @@ class PartialEvaluator {
       throw new Error('getOperatorList: missing "operatorList" parameter');
     }
 
+    // 优化：如果所有颜色都隐藏，直接返回空的 operatorList（显示空白页）
+    const checkAllHidden = async () => {
+      if (colorFilterConfig) {
+        const filterConfig =
+          typeof colorFilterConfig.then === "function"
+            ? await colorFilterConfig
+            : colorFilterConfig;
+        if (filterConfig && filterConfig.isAllHidden()) {
+          console.log(
+            `[ColorFilter] 页面${this.pageIndex + 1} 所有颜色隐藏，跳过渲染`
+          );
+          return true;
+        }
+      }
+      return false;
+    };
+
+    return checkAllHidden().then(allHidden => {
+      if (allHidden) {
+        return Promise.resolve();
+      }
+      return this._getOperatorListImpl({
+        stream,
+        task,
+        resources,
+        operatorList,
+        initialState,
+        fallbackFontDict,
+        prevRefs,
+        seenRefs,
+        colorFilterConfig,
+      });
+    });
+  }
+
+  _getOperatorListImpl({
+    stream,
+    task,
+    resources,
+    operatorList,
+    initialState,
+    fallbackFontDict,
+    prevRefs,
+    seenRefs,
+    colorFilterConfig,
+  }) {
     const self = this;
     const xref = this.xref;
     const localImageCache = new LocalImageCache();
