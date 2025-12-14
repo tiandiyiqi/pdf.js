@@ -143,7 +143,69 @@ class Toolbar {
           },
         },
       },
+      {
+        element: options.editorGeoShapeButton,
+        eventName: "switchannotationeditormode",
+        eventDetails: {
+          get mode() {
+            const { classList } = options.editorGeoShapeButton;
+            return classList.contains("toggled")
+              ? AnnotationEditorType.NONE
+              : AnnotationEditorType.GEOSHAPE;
+          },
+        },
+      },
     ];
+
+    // 添加几何图标按钮的事件处理
+    const geoShapeButtons = [
+      options.editorGeoShapeRect,
+      options.editorGeoShapeCirc,
+      options.editorGeoShapeArrow,
+    ];
+
+    // 为几何图标按钮添加点击事件
+    geoShapeButtons.forEach((button, index) => {
+      button.addEventListener("click", event => {
+        // 阻止事件冒泡，避免窗口关闭
+        event.stopPropagation();
+
+        // 移除所有按钮的toggled类
+        geoShapeButtons.forEach(btn => btn.classList.remove("toggled"));
+        // 为当前点击的按钮添加toggled类
+        button.classList.add("toggled");
+
+        // 设置当前几何工具类型
+        let shapeType = "geoshape";
+        if (button === options.editorGeoShapeRect) {
+          shapeType = "geoshapeRect";
+        } else if (button === options.editorGeoShapeCirc) {
+          shapeType = "geoshapeCirc";
+        } else if (button === options.editorGeoShapeArrow) {
+          shapeType = "geoshapeArrow";
+        }
+
+        // 激活几何按钮但不关闭窗口
+        if (
+          options.editorGeoShapeButton &&
+          !options.editorGeoShapeButton.classList.contains("toggled")
+        ) {
+          options.editorGeoShapeButton.classList.add("toggled");
+          // 触发几何模式切换事件，但不关闭窗口
+          this.eventBus.dispatch("switchannotationeditormode", {
+            source: this,
+            mode: AnnotationEditorType.GEOSHAPE,
+            isFromKeyboard: false,
+          });
+        }
+
+        // 触发几何工具类型变化事件
+        this.eventBus.dispatch("geoshapetoolchanged", {
+          source: this,
+          shapeType,
+        });
+      });
+    });
 
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
@@ -302,6 +364,8 @@ class Toolbar {
       editorStampParamsToolbar,
       editorSignatureButton,
       editorSignatureParamsToolbar,
+      editorGeoShapeButton,
+      editorGeoShapeParamsToolbar,
     } = this.#opts;
 
     toggleExpandedBtn(
@@ -334,6 +398,11 @@ class Toolbar {
       mode === AnnotationEditorType.SIGNATURE,
       editorSignatureParamsToolbar
     );
+    toggleExpandedBtn(
+      editorGeoShapeButton,
+      mode === AnnotationEditorType.GEOSHAPE,
+      editorGeoShapeParamsToolbar
+    );
 
     editorCommentButton.disabled =
       editorFreeTextButton.disabled =
@@ -341,6 +410,7 @@ class Toolbar {
       editorInkButton.disabled =
       editorStampButton.disabled =
       editorSignatureButton.disabled =
+      editorGeoShapeButton.disabled =
         mode === AnnotationEditorType.DISABLE;
   }
 

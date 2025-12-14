@@ -62,6 +62,13 @@ function getViewerConfiguration() {
       ),
       editorInkButton: document.getElementById("editorInkButton"),
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
+      editorGeoShapeButton: document.getElementById("editorGeoShapeButton"),
+      editorGeoShapeParamsToolbar: document.getElementById(
+        "editorGeoShapeParamsToolbar"
+      ),
+      editorGeoShapeRect: document.getElementById("editorGeoShapeRect"),
+      editorGeoShapeCirc: document.getElementById("editorGeoShapeCirc"),
+      editorGeoShapeArrow: document.getElementById("editorGeoShapeArrow"),
       editorStampButton: document.getElementById("editorStampButton"),
       editorStampParamsToolbar: document.getElementById(
         "editorStampParamsToolbar"

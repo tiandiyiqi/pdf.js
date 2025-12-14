@@ -57,6 +57,11 @@
   --toolbarSidebar-box-shadow:
     inset calc(-1px * var(--dir-factor)) 0 0 rgb(0 0 0 / 0.25),
     0 1px 0 rgb(0 0 0 / 0.15), 0 0 1px rgb(0 0 0 / 0.1);
+
+  /* Geometry tool cursor styles */
+  --editorGeoShape-rect-cursor: url(images/cursor-editorGeoShapeRect.svg) 0 16, crosshair;
+  --editorGeoShape-circ-cursor: url(images/cursor-editorGeoShapeCirc.svg) 0 16, crosshair;
+  --editorGeoShape-arrow-cursor: url(images/cursor-editorGeoShapeArrow.svg) 0 16, default;
   --toolbarSidebar-border-bottom: none;
   --button-hover-color: color-mix(in srgb, currentColor 17%, transparent);
   --toggled-btn-color: light-dark(rgb(0 0 0), rgb(255 255 255));
@@ -103,6 +108,7 @@
   --toolbarButton-editorFreeText-icon: url(images/toolbarButton-editorFreeText.svg);
   --toolbarButton-editorHighlight-icon: url(images/toolbarButton-editorHighlight.svg);
   --toolbarButton-editorInk-icon: url(images/toolbarButton-editorInk.svg);
+  --toolbarButton-editorGeoShape-icon: url(images/toolbarButton-GeoShape.svg);
   --toolbarButton-editorStamp-icon: url(images/toolbarButton-editorStamp.svg);
   --toolbarButton-editorSignature-icon: url(images/toolbarButton-editorSignature.svg);
   --toolbarButton-menuArrow-icon: url(images/toolbarButton-menuArrow.svg);
@@ -559,6 +565,10 @@ body {
 
 #editorInkButton::before {
   mask-image: var(--toolbarButton-editorInk-icon);
+}
+
+#editorGeoShapeButton::before {
+  mask-image: var(--toolbarButton-editorGeoShape-icon);
 }
 
 #editorStampButton::before {
@@ -1167,6 +1177,12 @@ dialog :link {
         justify-content: space-between;
       }
 
+      /* 几何按钮行独立样式 */
+      > .editorParamsSetter:has(#editorGeoShapeRect) {
+        justify-content: flex-start;
+        gap: 5px;
+      }
+
       .editorParamsColor {
         width: 32px;
         height: 32px;
@@ -1197,6 +1213,49 @@ dialog :link {
         &::-moz-range-thumb {
           background-color: white;
         }
+      }
+
+      /* 几何按钮图标样式 */
+      #editorGeoShapeRect,
+      #editorGeoShapeCirc,
+      #editorGeoShapeArrow {
+        width: 24px;
+        height: 24px;
+        margin: 0 2px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 2px;
+        transition: all 0.2s ease;
+      }
+
+      #editorGeoShapeRect:hover,
+      #editorGeoShapeCirc:hover,
+      #editorGeoShapeArrow:hover {
+        border-color: var(--doorhanger-hover-color);
+        background-color: var(--toolbarButton-hover-background);
+      }
+
+      #editorGeoShapeRect.toggled,
+      #editorGeoShapeCirc.toggled,
+      #editorGeoShapeArrow.toggled {
+        border-color: var(--doorhanger-hover-color);
+        background-color: var(--toolbarButton-active-background);
+        filter: brightness(1.2);
+      }
+
+      #editorGeoShapeRect:not(.toggled),
+      #editorGeoShapeCirc:not(.toggled),
+      #editorGeoShapeArrow:not(.toggled) {
+        filter: grayscale(0.7);
+        opacity: 0.7;
+      }
+
+      #editorGeoShapeRect img,
+      #editorGeoShapeCirc img,
+      #editorGeoShapeArrow img {
+        width: 18px;
+        height: 18px;
+        margin: 3px;
       }
     }
   }

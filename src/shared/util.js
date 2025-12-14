@@ -78,6 +78,7 @@ const AnnotationEditorType = {
   POPUP: 16,
   SIGNATURE: 101,
   COMMENT: 102,
+  GEOSHAPE: 103,
 };
 
 const AnnotationEditorParamsType = {

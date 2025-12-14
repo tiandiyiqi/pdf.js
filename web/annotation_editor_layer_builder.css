@@ -168,6 +168,22 @@
   cursor: var(--editorInk-editing-cursor);
 }
 
+.annotationEditorLayer.geoshapeEditing {
+  cursor: var(--editorGeoShape-rect-cursor); /* 默认使用矩形光标 */
+}
+
+.annotationEditorLayer.geoshapeRectEditing {
+  cursor: var(--editorGeoShape-rect-cursor);
+}
+
+.annotationEditorLayer.geoshapeCircEditing {
+  cursor: var(--editorGeoShape-circ-cursor);
+}
+
+.annotationEditorLayer.geoshapeArrowEditing {
+  cursor: var(--editorGeoShape-arrow-cursor);
+}
+
 .annotationEditorLayer .draw {
   box-sizing: border-box;
 }

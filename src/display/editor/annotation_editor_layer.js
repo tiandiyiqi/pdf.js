@@ -85,6 +85,8 @@ class AnnotationEditorLayer {
 
   #focusedElement = null;
 
+  #geoShapeToolAC = null;
+
   #textLayer = null;
 
   #textSelectionAC = null;
@@ -142,6 +144,40 @@ class AnnotationEditorLayer {
     this._structTree = structTreeLayer;
 
     this.#uiManager.addLayer(this);
+
+    // 添加几何工具变化事件监听器
+    this.#geoShapeToolAC = new AbortController();
+    const signal = this.#uiManager.combinedSignal(this.#geoShapeToolAC);
+    this.#uiManager._eventBus.on(
+      "geoshapetoolchanged",
+      ({ shapeType }) => {
+        this.#handleGeoShapeToolChange(shapeType);
+      },
+      { signal }
+    );
+  }
+
+  /**
+   * 处理几何工具变化事件
+   * @param {string} shapeType - 几何工具类型
+   */
+  #handleGeoShapeToolChange(shapeType) {
+    // 直接设置光标样式，而不是依赖CSS类
+    switch (shapeType) {
+      case "geoshape":
+      case "geoshapeRect":
+        this.div.style.cursor = "var(--editorGeoShape-rect-cursor)";
+        break;
+      case "geoshapeCirc":
+        this.div.style.cursor = "var(--editorGeoShape-circ-cursor)";
+        break;
+      case "geoshapeArrow":
+        this.div.style.cursor = "var(--editorGeoShape-arrow-cursor)";
+        break;
+      default:
+        // 默认情况下，恢复为geoshapeEditing类的样式
+        this.div.style.cursor = "";
+    }
   }
 
   get isEmpty() {
@@ -204,6 +240,18 @@ class AnnotationEditorLayer {
           `${editorType._type}Editing`,
           mode === editorType._editorType
         );
+      }
+
+      // 处理几何编辑模式
+      if (mode === AnnotationEditorType.GEOSHAPE) {
+        // 当切换到几何模式时，应用默认的几何编辑类
+        classList.toggle("geoshapeEditing", true);
+      } else {
+        // 当离开几何模式时，移除所有几何编辑类
+        classList.toggle("geoshapeEditing", false);
+        classList.toggle("geoshapeRectEditing", false);
+        classList.toggle("geoshapeCircEditing", false);
+        classList.toggle("geoshapeArrowEditing", false);
       }
     }
     this.div.hidden = false;
@@ -1015,6 +1063,10 @@ class AnnotationEditorLayer {
     this.div = null;
     this.#editors.clear();
     this.#uiManager.removeLayer(this);
+
+    // 清理几何工具事件监听器
+    this.#geoShapeToolAC?.abort();
+    this.#geoShapeToolAC = null;
   }
 
   #cleanup() {
