@@ -45,7 +45,11 @@ import {
   RefSet,
   RefSetCache,
 } from "./primitives.js";
-import { GlobalColorSpaceCache, GlobalImageCache } from "./image_utils.js";
+import {
+  FilteredImageCache,
+  GlobalColorSpaceCache,
+  GlobalImageCache,
+} from "./image_utils.js";
 import { NameTree, NumberTree } from "./name_number_tree.js";
 import { BaseStream } from "./base_stream.js";
 import { clearGlobalCaches } from "./cleanup_helper.js";
@@ -97,6 +101,8 @@ class Catalog {
 
   globalImageCache = new GlobalImageCache();
 
+  globalFilteredImageCache = null; // Will be initialized lazily
+
   nonBlendModesSet = new RefSet();
 
   pageDictCache = new RefSetCache();
@@ -120,6 +126,9 @@ class Catalog {
     // Given that `XRef.parse` will both fetch *and* validate the /Pages-entry,
     // the following call must always succeed here:
     this.toplevelPagesDict; // eslint-disable-line no-unused-expressions
+
+    // Initialize global filtered image cache (shared across all pages)
+    this.globalFilteredImageCache = new FilteredImageCache();
   }
 
   cloneDict() {

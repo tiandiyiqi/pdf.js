@@ -63,6 +63,7 @@ import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
 import { isPDFFunction, PDFFunctionFactory } from "./function.js";
 import { Lexer, Parser } from "./parser.js";
 import {
+  FilteredImageCache,
   LocalColorSpaceCache,
   LocalGStateCache,
   LocalImageCache,
@@ -229,6 +230,7 @@ class PartialEvaluator {
     standardFontDataCache,
     globalColorSpaceCache,
     globalImageCache,
+    globalFilteredImageCache,
     systemFontCache,
     options = null,
   }) {
@@ -247,6 +249,10 @@ class PartialEvaluator {
 
     this._regionalImageCache = new RegionalImageCache();
     this._fetchBuiltInCMapBound = this.fetchBuiltInCMap.bind(this);
+
+    // 使用全局颜色过滤图像缓存（与globalImageCache类似）
+    this.filteredImageCache =
+      globalFilteredImageCache || new FilteredImageCache();
   }
 
   /**
@@ -273,6 +279,17 @@ class PartialEvaluator {
       newOptions
     );
     return newEvaluator;
+  }
+
+  /**
+   * 清理缓存
+   * 在页面或文档销毁时调用
+   */
+  cleanup() {
+    if (this.filteredImageCache) {
+      console.log("[PartialEvaluator] 清理 FilteredImageCache");
+      this.filteredImageCache.clear();
+    }
   }
 
   hasBlendModes(resources, nonBlendModesSet) {
@@ -582,6 +599,12 @@ class PartialEvaluator {
     localColorSpaceCache,
     colorFilterConfig = null,
   }) {
+    const filterConfigPromise =
+      colorFilterConfig && typeof colorFilterConfig.then === "function"
+        ? colorFilterConfig
+        : colorFilterConfig
+          ? Promise.resolve(colorFilterConfig)
+          : null;
     const { maxImageSize, ignoreErrors, isOffscreenCanvasSupported } =
       this.options;
 
@@ -632,6 +655,34 @@ class PartialEvaluator {
         fn = OPS.paintSolidColorImageMask;
         args = [];
         operatorList.addImageOps(fn, args, optionalContent);
+
+        // 如果有 colorFilterConfig，保存到 FilteredImageCache
+        if (filterConfigPromise && imageRef) {
+          filterConfigPromise
+            .then(filterConfig => {
+              const filterStateKey = filterConfig.getFilterStateKey();
+
+              // 只缓存非原始状态
+              if (filterStateKey !== "original") {
+                const cacheData = { fn, args, optionalContent };
+                const byteSize = this._estimateImageByteSize(args);
+
+                this.filteredImageCache.setData(
+                  imageRef,
+                  filterStateKey,
+                  cacheData,
+                  byteSize
+                );
+
+                console.log(
+                  `[FilteredImageCache] 保存缓存(SolidColor): 状态=${filterStateKey}, 大小=${byteSize}字节`
+                );
+              }
+            })
+            .catch(err => {
+              console.error("[FilteredImageCache] 保存失败:", err);
+            });
+        }
 
         if (cacheKey) {
           const cacheData = { fn, args, optionalContent };
@@ -698,6 +749,34 @@ class PartialEvaluator {
       ];
       operatorList.addImageOps(fn, args, optionalContent);
 
+      // 如果有 colorFilterConfig，保存到 FilteredImageCache
+      if (filterConfigPromise && imageRef) {
+        filterConfigPromise
+          .then(filterConfig => {
+            const filterStateKey = filterConfig.getFilterStateKey();
+
+            // 只缓存非原始状态
+            if (filterStateKey !== "original") {
+              const cacheData = { fn, args, optionalContent };
+              const byteSize = this._estimateImageByteSize(args);
+
+              this.filteredImageCache.setData(
+                imageRef,
+                filterStateKey,
+                cacheData,
+                byteSize
+              );
+
+              console.log(
+                `[FilteredImageCache] 保存缓存(Mask): 状态=${filterStateKey}, 大小=${byteSize}字节`
+              );
+            }
+          })
+          .catch(err => {
+            console.error("[FilteredImageCache] 保存失败:", err);
+          });
+      }
+
       if (cacheKey) {
         const cacheData = { objId, fn, args, optionalContent };
         localImageCache.set(cacheKey, imageRef, cacheData);
@@ -735,6 +814,38 @@ class PartialEvaluator {
           [imgData],
           optionalContent
         );
+
+        // 如果有 colorFilterConfig，保存到 FilteredImageCache
+        if (filterConfigPromise && imageRef) {
+          filterConfigPromise
+            .then(filterConfig => {
+              const filterStateKey = filterConfig.getFilterStateKey();
+
+              // 只缓存非原始状态
+              if (filterStateKey !== "original") {
+                const cacheData = {
+                  fn: OPS.paintInlineImageXObject,
+                  args: [imgData],
+                  optionalContent,
+                };
+                const byteSize = this._estimateImageByteSize([imgData]);
+
+                this.filteredImageCache.setData(
+                  imageRef,
+                  filterStateKey,
+                  cacheData,
+                  byteSize
+                );
+
+                console.log(
+                  `[FilteredImageCache] 保存缓存(Inline): 状态=${filterStateKey}, 大小=${byteSize}字节`
+                );
+              }
+            })
+            .catch(err => {
+              console.error("[FilteredImageCache] 保存失败:", err);
+            });
+        }
       } catch (reason) {
         const msg = `Unable to decode inline image: "${reason}".`;
 
@@ -773,6 +884,34 @@ class PartialEvaluator {
     fn = OPS.paintImageXObject;
     args = [objId, w, h];
     operatorList.addImageOps(fn, args, optionalContent, hasMask);
+
+    // 如果有 colorFilterConfig，保存到 FilteredImageCache
+    if (filterConfigPromise && imageRef) {
+      filterConfigPromise
+        .then(filterConfig => {
+          const filterStateKey = filterConfig.getFilterStateKey();
+
+          // 只缓存非原始状态
+          if (filterStateKey !== "original") {
+            const cacheData = { fn, args, optionalContent };
+            const byteSize = this._estimateImageByteSize(args);
+
+            this.filteredImageCache.setData(
+              imageRef,
+              filterStateKey,
+              cacheData,
+              byteSize
+            );
+
+            console.log(
+              `[FilteredImageCache] 保存缓存: 状态=${filterStateKey}, 大小=${byteSize}字节`
+            );
+          }
+        })
+        .catch(err => {
+          console.error("[FilteredImageCache] 保存失败:", err);
+        });
+    }
 
     if (cacheGlobally) {
       globalCacheData = {
@@ -859,6 +998,34 @@ class PartialEvaluator {
         }
       }
     }
+  }
+
+  /**
+   * 估算图像数据的字节大小
+   * @param {Array} args - 图像操作参数
+   * @returns {number} 估算的字节大小
+   */
+  _estimateImageByteSize(args) {
+    // args 通常是 [imgData] 或类似结构
+    if (!args || args.length === 0) {
+      return 0;
+    }
+
+    const imgData = args[0];
+    if (imgData && typeof imgData === "object") {
+      // 如果有 width 和 height，估算为 RGBA (4 bytes per pixel)
+      if (imgData.width && imgData.height) {
+        return imgData.width * imgData.height * 4;
+      }
+
+      // 如果有 data 数组，使用其长度
+      if (imgData.data && imgData.data.length) {
+        return imgData.data.length;
+      }
+    }
+
+    // 默认返回一个保守估计值
+    return 10000; // 10KB
   }
 
   handleSMask(
@@ -1836,46 +2003,66 @@ class PartialEvaluator {
         let fn = operation.fn;
 
         switch (fn | 0) {
-          case OPS.paintXObject:
+          case OPS.paintXObject: {
             // eagerly compile XForm objects
             isValidName = args[0] instanceof Name;
             name = args[0].name;
-
-            if (isValidName) {
-              // 注意：当colorFilterConfig存在时，跳过本地缓存检查
-              // 这样可以确保使用新的颜色过滤配置重新生成图像
-              if (!colorFilterConfig) {
-                const localImage = localImageCache.getByName(name);
-                if (localImage) {
-                  addCachedImageOps(operatorList, localImage);
-                  args = null;
-                  continue;
-                }
-              }
-            }
+            const filterConfigPromise =
+              colorFilterConfig && typeof colorFilterConfig.then === "function"
+                ? colorFilterConfig
+                : colorFilterConfig
+                  ? Promise.resolve(colorFilterConfig)
+                  : null;
 
             next(
-              new Promise(function (resolveXObject, rejectXObject) {
+              (async function () {
                 if (!isValidName) {
                   throw new FormatError("XObject must be referred to by name.");
                 }
 
                 let xobj = xobjs.getRaw(name);
-                if (xobj instanceof Ref) {
-                  // 注意：当colorFilterConfig存在时，跳过缓存检查
-                  // 这样可以确保使用新的颜色过滤配置重新生成图像
-                  if (!colorFilterConfig) {
-                    const cachedImage =
-                      localImageCache.getByRef(xobj) ||
-                      self._regionalImageCache.getByRef(xobj) ||
-                      self.globalImageCache.getData(xobj, self.pageIndex);
-                    if (cachedImage) {
-                      addCachedImageOps(operatorList, cachedImage);
-                      resolveXObject();
+                const filterRef =
+                  xobj instanceof Ref ? xobj : xobj?.dict?.objId || null;
+
+                // 先尝试缓存（支持颜色过滤缓存 + 原有缓存）
+                const filterConfig = filterConfigPromise
+                  ? await filterConfigPromise
+                  : null;
+
+                if (filterConfig) {
+                  const filterStateKey = filterConfig.getFilterStateKey();
+                  if (filterStateKey === "original") {
+                    const localImage = localImageCache.getByName(name);
+                    if (localImage) {
+                      addCachedImageOps(operatorList, localImage);
+                      return;
+                    }
+                  } else if (filterRef) {
+                    const filteredImage = self.filteredImageCache.getData(
+                      filterRef,
+                      filterStateKey
+                    );
+                    if (filteredImage) {
+                      console.log(
+                        `[FilteredImageCache] 缓存命中: ${name}, 状态: ${filterStateKey}`
+                      );
+                      addCachedImageOps(operatorList, filteredImage);
                       return;
                     }
                   }
+                } else if (xobj instanceof Ref) {
+                  const cachedImage =
+                    localImageCache.getByRef(xobj) ||
+                    self._regionalImageCache.getByRef(xobj) ||
+                    self.globalImageCache.getData(xobj, self.pageIndex);
+                  if (cachedImage) {
+                    addCachedImageOps(operatorList, cachedImage);
+                    return;
+                  }
+                }
 
+                // 未命中缓存，继续正常流程
+                if (xobj instanceof Ref) {
                   xobj = xref.fetch(xobj);
                 }
 
@@ -1890,47 +2077,41 @@ class PartialEvaluator {
 
                 if (type.name === "Form") {
                   stateManager.save();
-                  self
-                    .buildFormXObject(
-                      resources,
-                      xobj,
-                      null,
-                      operatorList,
-                      task,
-                      stateManager.state.clone({ newPath: true }),
-                      localColorSpaceCache,
-                      seenRefs,
-                      colorFilterConfig
-                    )
-                    .then(function () {
-                      stateManager.restore();
-                      resolveXObject();
-                    }, rejectXObject);
-                  return;
-                } else if (type.name === "Image") {
-                  self
-                    .buildPaintImageXObject({
-                      resources,
-                      image: xobj,
-                      operatorList,
-                      cacheKey: name,
-                      localImageCache,
-                      localColorSpaceCache,
-                      colorFilterConfig,
-                    })
-                    .then(resolveXObject, rejectXObject);
-                  return;
-                } else if (type.name === "PS") {
-                  // PostScript XObjects are unused when viewing documents.
-                  // See section 4.7.1 of Adobe's PDF reference.
-                  info("Ignored XObject subtype PS");
-                } else {
-                  throw new FormatError(
-                    `Unhandled XObject subtype ${type.name}`
+                  await self.buildFormXObject(
+                    resources,
+                    xobj,
+                    null,
+                    operatorList,
+                    task,
+                    stateManager.state.clone({ newPath: true }),
+                    localColorSpaceCache,
+                    seenRefs,
+                    colorFilterConfig
                   );
+                  stateManager.restore();
+                  return;
                 }
-                resolveXObject();
-              }).catch(function (reason) {
+
+                if (type.name === "Image") {
+                  await self.buildPaintImageXObject({
+                    resources,
+                    image: xobj,
+                    operatorList,
+                    cacheKey: name,
+                    localImageCache,
+                    localColorSpaceCache,
+                    colorFilterConfig,
+                  });
+                  return;
+                }
+
+                if (type.name === "PS") {
+                  info("Ignored XObject subtype PS");
+                  return;
+                }
+
+                throw new FormatError(`Unhandled XObject subtype ${type.name}`);
+              })().catch(function (reason) {
                 if (reason instanceof AbortException) {
                   return;
                 }
@@ -1942,6 +2123,7 @@ class PartialEvaluator {
               })
             );
             return;
+          }
           case OPS.setFont:
             const fontSize = args[1];
             // eagerly collect all fonts

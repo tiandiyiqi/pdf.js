@@ -215,6 +215,248 @@ class GlobalColorSpaceCache extends BaseLocalCache {
   }
 }
 
+/**
+ * 颜色过滤图像缓存
+ * 为不同的颜色过滤状态缓存图像数据
+ *
+ * 缓存结构：RefSetCache<imageRef, Map<filterStateKey, imageDataEntry>>
+ * 其中 imageDataEntry = { data, byteSize, createdAt }
+ */
+class FilteredImageCache {
+  static MAX_FILTER_STATES_PER_IMAGE = 8; // 每个图像最多缓存8种颜色组合
+  static MAX_TOTAL_BYTE_SIZE = 3e7; // 30MB 总缓存限制
+
+  constructor() {
+    // imageRef → Map<filterStateKey, imageDataEntry>
+    this._cache = new RefSetCache();
+
+    // 追踪总字节大小
+    this._totalByteSize = 0;
+
+    // LRU 访问记录：Map<combinedKey, timestamp>
+    this._accessLog = new Map();
+  }
+
+  /**
+   * 生成复合缓存键（用于 LRU 访问日志）
+   * @param {Ref} ref - 图像引用
+   * @param {string} filterStateKey - 颜色状态键
+   * @returns {string}
+   */
+  _getCombinedKey(ref, filterStateKey) {
+    const refStr =
+      typeof ref === "string" ? ref : ref?.toString ? ref.toString() : "";
+    return `${refStr}_${filterStateKey}`;
+  }
+
+  /**
+   * 获取缓存的图像数据
+   * @param {Ref} ref - 图像引用
+   * @param {string} filterStateKey - 颜色状态键
+   * @returns {Object|null} 图像数据，如果未找到返回 null
+   */
+  getData(ref, filterStateKey) {
+    const stateMap = this._cache.get(ref);
+    if (!stateMap) {
+      return null;
+    }
+
+    const entry = stateMap.get(filterStateKey);
+    if (!entry) {
+      return null;
+    }
+
+    // 更新访问时间（LRU）
+    const combinedKey = this._getCombinedKey(ref, filterStateKey);
+    this._accessLog.set(combinedKey, Date.now());
+
+    return entry.data;
+  }
+
+  /**
+   * 设置缓存数据
+   * @param {Ref} ref - 图像引用
+   * @param {string} filterStateKey - 颜色状态键
+   * @param {Object} imageData - 图像数据（包含 fn, args, optionalContent）
+   * @param {number} byteSize - 数据大小（字节）
+   */
+  setData(ref, filterStateKey, imageData, byteSize = 0) {
+    // 检查是否需要清理缓存
+    if (this._shouldEvict(byteSize)) {
+      this._evictLRU();
+    }
+
+    // 获取或创建该图像的状态映射
+    let stateMap = this._cache.get(ref);
+    if (!stateMap) {
+      stateMap = new Map();
+      this._cache.put(ref, stateMap);
+    }
+
+    // 检查该图像的过滤状态数量限制
+    if (
+      stateMap.size >= FilteredImageCache.MAX_FILTER_STATES_PER_IMAGE &&
+      !stateMap.has(filterStateKey)
+    ) {
+      // 删除该图像最旧的过滤状态
+      this._evictOldestState(ref, stateMap);
+    }
+
+    // 保存数据
+    const entry = {
+      data: imageData,
+      byteSize,
+      createdAt: Date.now(),
+    };
+    stateMap.set(filterStateKey, entry);
+
+    this._totalByteSize += byteSize;
+
+    // 记录访问
+    const combinedKey = this._getCombinedKey(ref, filterStateKey);
+    this._accessLog.set(combinedKey, Date.now());
+  }
+
+  /**
+   * 判断是否需要驱逐缓存
+   * @param {number} newByteSize - 即将添加的数据大小
+   * @returns {boolean}
+   */
+  _shouldEvict(newByteSize) {
+    return (
+      this._totalByteSize + newByteSize > FilteredImageCache.MAX_TOTAL_BYTE_SIZE
+    );
+  }
+
+  /**
+   * 驱逐最久未使用的缓存（LRU）
+   */
+  _evictLRU() {
+    // 找到最旧的访问记录
+    let oldestKey = null;
+    let oldestTime = Infinity;
+
+    for (const [key, time] of this._accessLog.entries()) {
+      if (time < oldestTime) {
+        oldestTime = time;
+        oldestKey = key;
+      }
+    }
+
+    if (!oldestKey) {
+      return;
+    }
+
+    // 解析 combinedKey 获取 ref 和 filterStateKey
+    const lastUnderscore = oldestKey.lastIndexOf("_");
+    const refStr = oldestKey.substring(0, lastUnderscore);
+    const filterStateKey = oldestKey.substring(lastUnderscore + 1);
+
+    // 从缓存中删除
+    for (const [ref, stateMap] of this._cache) {
+      if (ref.toString() === refStr) {
+        const entry = stateMap.get(filterStateKey);
+        if (entry) {
+          this._totalByteSize -= entry.byteSize;
+          stateMap.delete(filterStateKey);
+          this._accessLog.delete(oldestKey);
+
+          // 如果该图像没有任何过滤状态了，删除整个映射
+          if (stateMap.size === 0) {
+            this._cache.delete(ref);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * 驱逐指定图像最旧的过滤状态
+   * @param {Ref} ref - 图像引用
+   * @param {Map} stateMap - 状态映射
+   */
+  _evictOldestState(ref, stateMap) {
+    let oldestStateKey = null;
+    let oldestTime = Infinity;
+
+    for (const [stateKey, entry] of stateMap.entries()) {
+      if (entry.createdAt < oldestTime) {
+        oldestTime = entry.createdAt;
+        oldestStateKey = stateKey;
+      }
+    }
+
+    if (oldestStateKey) {
+      const entry = stateMap.get(oldestStateKey);
+      this._totalByteSize -= entry.byteSize;
+      stateMap.delete(oldestStateKey);
+
+      const combinedKey = this._getCombinedKey(ref, oldestStateKey);
+      this._accessLog.delete(combinedKey);
+    }
+  }
+
+  /**
+   * 清除指定图像的所有缓存状态
+   * @param {Ref} ref - 图像引用
+   */
+  clearImage(ref) {
+    const stateMap = this._cache.get(ref);
+    if (!stateMap) {
+      return;
+    }
+
+    // 减少总字节数
+    for (const entry of stateMap.values()) {
+      this._totalByteSize -= entry.byteSize;
+    }
+
+    // 删除访问日志
+    for (const stateKey of stateMap.keys()) {
+      const combinedKey = this._getCombinedKey(ref, stateKey);
+      this._accessLog.delete(combinedKey);
+    }
+
+    this._cache.delete(ref);
+  }
+
+  /**
+   * 清空所有缓存
+   */
+  clear() {
+    this._cache.clear();
+    this._accessLog.clear();
+    this._totalByteSize = 0;
+  }
+
+  /**
+   * 获取缓存统计信息
+   * @returns {Object}
+   */
+  getStats() {
+    let totalImages = 0;
+    let totalStates = 0;
+
+    for (const stateMap of this._cache) {
+      totalImages++;
+      totalStates += stateMap.size;
+    }
+
+    return {
+      totalImages,
+      totalStates,
+      totalByteSize: this._totalByteSize,
+      maxByteSize: FilteredImageCache.MAX_TOTAL_BYTE_SIZE,
+      utilization:
+        (
+          (this._totalByteSize / FilteredImageCache.MAX_TOTAL_BYTE_SIZE) *
+          100
+        ).toFixed(2) + "%",
+    };
+  }
+}
+
 class GlobalImageCache {
   static NUM_PAGES_THRESHOLD = 2;
 
@@ -336,6 +578,7 @@ class GlobalImageCache {
 }
 
 export {
+  FilteredImageCache,
   GlobalColorSpaceCache,
   GlobalImageCache,
   LocalColorSpaceCache,

@@ -96,6 +96,7 @@ class Page {
     standardFontDataCache,
     globalColorSpaceCache,
     globalImageCache,
+    globalFilteredImageCache,
     systemFontCache,
     nonBlendModesSet,
     xfaFactory,
@@ -110,6 +111,7 @@ class Page {
     this.standardFontDataCache = standardFontDataCache;
     this.globalColorSpaceCache = globalColorSpaceCache;
     this.globalImageCache = globalImageCache;
+    this.globalFilteredImageCache = globalFilteredImageCache;
     this.systemFontCache = systemFontCache;
     this.nonBlendModesSet = nonBlendModesSet;
     this.evaluatorOptions = pdfManager.evaluatorOptions;
@@ -140,6 +142,7 @@ class Page {
       standardFontDataCache: this.standardFontDataCache,
       globalColorSpaceCache: this.globalColorSpaceCache,
       globalImageCache: this.globalImageCache,
+      globalFilteredImageCache: this.globalFilteredImageCache,
       systemFontCache: this.systemFontCache,
       options: this.evaluatorOptions,
     });
@@ -1691,6 +1694,7 @@ class PDFDocument {
           standardFontDataCache: catalog.standardFontDataCache,
           globalColorSpaceCache: catalog.globalColorSpaceCache,
           globalImageCache: catalog.globalImageCache,
+          globalFilteredImageCache: catalog.globalFilteredImageCache,
           systemFontCache: catalog.systemFontCache,
           nonBlendModesSet: catalog.nonBlendModesSet,
           xfaFactory,
@@ -1791,6 +1795,7 @@ class PDFDocument {
               standardFontDataCache: catalog.standardFontDataCache,
               globalColorSpaceCache: this.globalColorSpaceCache,
               globalImageCache: catalog.globalImageCache,
+              globalFilteredImageCache: catalog.globalFilteredImageCache,
               systemFontCache: catalog.systemFontCache,
               nonBlendModesSet: catalog.nonBlendModesSet,
               xfaFactory: null,

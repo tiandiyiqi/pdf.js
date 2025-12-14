@@ -158,6 +158,63 @@ class ColorFilterConfig {
   clone() {
     return new ColorFilterConfig(this.getConfig());
   }
+
+  /**
+   * 生成当前颜色过滤状态的唯一键
+   * 用于缓存不同颜色组合的渲染结果
+   * @returns {string} 状态键，格式如 "CMYK:1011|Spot1:1_Spot2:0"
+   */
+  getFilterStateKey() {
+    if (!this.#enabled) {
+      return "original"; // 未启用过滤，返回原始状态
+    }
+
+    const parts = [];
+
+    // CMYK 通道状态（按固定顺序: Cyan, Magenta, Yellow, Black）
+    const cmykChannels = ["Cyan", "Magenta", "Yellow", "Black"];
+    const cmykState = cmykChannels
+      .map(channel => (this.isVisible(channel) ? "1" : "0"))
+      .join("");
+    parts.push(`CMYK:${cmykState}`);
+
+    // 专色状态（按名称排序以确保一致性）
+    const spotColors = [];
+    for (const [colorName, visible] of this.#colors.entries()) {
+      if (!cmykChannels.includes(colorName)) {
+        spotColors.push({ name: colorName, visible });
+      }
+    }
+
+    if (spotColors.length > 0) {
+      spotColors.sort((a, b) => a.name.localeCompare(b.name));
+      const spotState = spotColors
+        .map(spot => `${spot.name}:${spot.visible ? "1" : "0"}`)
+        .join("_");
+      parts.push(spotState);
+    }
+
+    return parts.join("|");
+  }
+
+  /**
+   * 检查是否为原始状态（所有颜色都可见）
+   * @returns {boolean}
+   */
+  isOriginalState() {
+    if (!this.#enabled) {
+      return true;
+    }
+
+    // 检查所有注册的颜色是否都可见
+    for (const [colorName, visible] of this.#colors.entries()) {
+      if (visible === false) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }
 
 export { ColorFilterConfig };
