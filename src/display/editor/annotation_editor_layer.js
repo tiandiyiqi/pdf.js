@@ -31,6 +31,8 @@ import {
   FeatureTest,
 } from "../../shared/util.js";
 import { AnnotationEditor } from "./editor.js";
+import { ArrowEditor } from "./arrow.js";
+import { CircleEditor } from "./circle.js";
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
@@ -106,12 +108,16 @@ class AnnotationEditorLayer {
     [
       FreeTextEditor,
       InkEditor,
-      RectangleEditor,
+      RectangleEditor, // GEOSHAPE is represented by RectangleEditor in the map
       StampEditor,
       HighlightEditor,
       SignatureEditor,
     ].map(type => [type._editorType, type])
   );
+
+  // Additional GEOSHAPE editors that share the same _editorType
+  // These are not in the map but are initialized separately
+  static #geoShapeEditors = [CircleEditor, ArrowEditor];
 
   /**
    * @param {AnnotationEditorLayerOptions} options
@@ -131,7 +137,12 @@ class AnnotationEditorLayer {
     const editorTypes = [...AnnotationEditorLayer.#editorTypes.values()];
     if (!AnnotationEditorLayer._initialized) {
       AnnotationEditorLayer._initialized = true;
+      // Initialize all editor types in the map
       for (const editorType of editorTypes) {
+        editorType.initialize(l10n, uiManager);
+      }
+      // Initialize additional GEOSHAPE editors
+      for (const editorType of AnnotationEditorLayer.#geoShapeEditors) {
         editorType.initialize(l10n, uiManager);
       }
     }
@@ -746,11 +757,9 @@ class AnnotationEditorLayer {
         case "geoshapeRect":
           return RectangleEditor;
         case "geoshapeCirc":
-          // TODO: Return CircleEditor when implemented
-          return null;
+          return CircleEditor;
         case "geoshapeArrow":
-          // TODO: Return ArrowEditor when implemented
-          return null;
+          return ArrowEditor;
         default:
           return null;
       }

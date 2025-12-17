@@ -102,14 +102,34 @@ class DrawLayer {
     const defs = DrawLayer._svgFactory.createElement("defs");
     root.append(defs);
 
-    // Determine element type: rect or path
-    const isRect = properties.rect !== undefined;
-    const elementType = isRect ? "rect" : "path";
+    // Determine element type: rect, ellipse, or path
+    let elementType;
+    if (properties.rect !== undefined) {
+      elementType = "rect";
+    } else if (properties.ellipse !== undefined) {
+      elementType = "ellipse";
+    } else {
+      elementType = "path";
+    }
+
     const element = DrawLayer._svgFactory.createElement(elementType);
     defs.append(element);
     const elementId = `${elementType}_p${this.pageIndex}_${id}`;
     element.setAttribute("id", elementId);
     element.setAttribute("vector-effect", "non-scaling-stroke");
+
+    // For arrows, also create a line element
+    if (properties.line !== undefined) {
+      const lineElement = DrawLayer._svgFactory.createElement("line");
+      defs.append(lineElement);
+      const lineId = `line_p${this.pageIndex}_${id}`;
+      lineElement.setAttribute("id", lineId);
+      lineElement.setAttribute("vector-effect", "non-scaling-stroke");
+
+      const lineUse = DrawLayer._svgFactory.createElement("use");
+      root.append(lineUse);
+      lineUse.setAttribute("href", `#${lineId}`);
+    }
 
     if (isPathUpdatable) {
       this.#toUpdate.set(id, element);
@@ -198,6 +218,11 @@ class DrawLayer {
       path,
       rect,
       rectTransformOrigin,
+      ellipse,
+      ellipseTransformOrigin,
+      line,
+      lineTransformOrigin,
+      pathTransformOrigin,
       transform,
     } = properties;
     const element =
@@ -221,23 +246,59 @@ class DrawLayer {
     }
     if (path) {
       const defs = element.firstElementChild;
-      const pathElement = defs.firstElementChild;
-      this.#updateProperties(pathElement, path);
+      const pathElement = defs.querySelector("path");
+      if (pathElement) {
+        this.#updateProperties(pathElement, path);
+      }
     }
     if (rect) {
       const defs = element.firstElementChild;
-      const rectElement = defs.firstElementChild;
-      this.#updateProperties(rectElement, rect);
+      const rectElement = defs.querySelector("rect");
+      if (rectElement) {
+        this.#updateProperties(rectElement, rect);
+      }
+    }
+    if (ellipse) {
+      const defs = element.firstElementChild;
+      const ellipseElement = defs.querySelector("ellipse");
+      if (ellipseElement) {
+        this.#updateProperties(ellipseElement, ellipse);
+      }
+    }
+    if (line) {
+      const defs = element.firstElementChild;
+      const lineElement = defs.querySelector("line");
+      if (lineElement) {
+        this.#updateProperties(lineElement, line);
+      }
     }
     if (rectTransformOrigin) {
-      const use = element.querySelector("use");
+      const use = element.querySelector("use[href*='rect']");
       if (use) {
         use.style.transformOrigin = rectTransformOrigin;
       }
     }
-    if (transform !== undefined) {
-      const use = element.querySelector("use");
+    if (ellipseTransformOrigin) {
+      const use = element.querySelector("use[href*='ellipse']");
       if (use) {
+        use.style.transformOrigin = ellipseTransformOrigin;
+      }
+    }
+    if (lineTransformOrigin) {
+      const use = element.querySelector("use[href*='line']");
+      if (use) {
+        use.style.transformOrigin = lineTransformOrigin;
+      }
+    }
+    if (pathTransformOrigin) {
+      const use = element.querySelector("use[href*='path']");
+      if (use) {
+        use.style.transformOrigin = pathTransformOrigin;
+      }
+    }
+    if (transform !== undefined) {
+      const uses = element.querySelectorAll("use");
+      for (const use of uses) {
         use.setAttribute("transform", transform || "");
       }
     }

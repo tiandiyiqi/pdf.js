@@ -98,6 +98,13 @@ const AnnotationEditorParamsType = {
   RECTANGLE_COLOR: 51,
   RECTANGLE_THICKNESS: 52,
   RECTANGLE_OPACITY: 53,
+  CIRCLE_COLOR: 54,
+  CIRCLE_THICKNESS: 55,
+  CIRCLE_OPACITY: 56,
+  ARROW_COLOR: 57,
+  ARROW_THICKNESS: 58,
+  ARROW_OPACITY: 59,
+  ARROW_HEAD_SIZE: 60,
 };
 
 // Permission flags from Table 22, Section 7.6.3.2 of the PDF specification.

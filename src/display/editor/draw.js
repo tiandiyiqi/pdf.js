@@ -781,6 +781,14 @@ class DrawingEditor extends AnnotationEditor {
       return;
     }
 
+    // Ensure the editor is initialized before starting to draw
+    if (!this._defaultDrawingOptions) {
+      console.error(
+        `${this.name} is not initialized. Call initialize() first.`
+      );
+      return;
+    }
+
     uiManager.updateUIForDefaultProperties(this);
 
     DrawingEditor.#currentDraw = this.createDrawerInstance(
