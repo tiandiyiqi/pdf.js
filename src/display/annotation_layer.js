@@ -3163,6 +3163,7 @@ class SquareAnnotationElement extends AnnotationElement {
 
   constructor(parameters) {
     super(parameters, { isRenderable: true, ignoreBorder: true });
+    this.annotationEditorType = AnnotationEditorType.GEOSHAPE;
   }
 
   render() {
@@ -3212,6 +3213,32 @@ class SquareAnnotationElement extends AnnotationElement {
 
   addHighlightArea() {
     this.container.classList.add("highlightArea");
+  }
+
+  updateEdited(params) {
+    super.updateEdited(params);
+    const { thickness, rect } = params;
+    const square = this.#square;
+
+    if (thickness >= 0) {
+      square.setAttribute("stroke-width", thickness || 1);
+    }
+
+    if (rect) {
+      const [x1, y1, x2, y2] = rect;
+      const width = Math.abs(x2 - x1);
+      const height = Math.abs(y2 - y1);
+      const borderWidth = thickness || this.data.borderStyle.width || 1;
+
+      square.setAttribute("x", borderWidth / 2);
+      square.setAttribute("y", borderWidth / 2);
+      square.setAttribute("width", width - borderWidth);
+      square.setAttribute("height", height - borderWidth);
+
+      const svg = square.parentElement;
+      svg.setAttribute("width", width);
+      svg.setAttribute("height", height);
+    }
   }
 }
 
@@ -4182,5 +4209,6 @@ export {
   FreeTextAnnotationElement,
   HighlightAnnotationElement,
   InkAnnotationElement,
+  SquareAnnotationElement,
   StampAnnotationElement,
 };

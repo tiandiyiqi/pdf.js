@@ -184,8 +184,17 @@ class DrawingEditor extends AnnotationEditor {
   /** @inheritdoc */
   static updateDefaultParams(type, value) {
     const propertyName = this.typesMap.get(type);
+    console.log("[DEBUG] DrawingEditor.updateDefaultParams:", {
+      editorType: this.name,
+      type,
+      value,
+      propertyName,
+      typesMap: Array.from(this.typesMap.entries()),
+      hasCurrentParent: !!this._currentParent,
+    });
     if (propertyName) {
       this._defaultDrawingOptions.updateProperty(propertyName, value);
+      console.log("[DEBUG] 更新后的默认选项:", this._defaultDrawingOptions);
     }
     if (this._currentParent) {
       DrawingEditor.#currentDraw.updateProperty(propertyName, value);

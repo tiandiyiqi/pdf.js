@@ -345,6 +345,9 @@ pdfjs-editor-highlight-editor =
 pdfjs-editor-ink-editor =
     .aria-label = Drawing editor
 
+pdfjs-editor-rectangle-editor =
+    .aria-label = Rectangle editor
+
 # Used when a signature editor is selected/hovered.
 # Variables:
 #   $description (String) - a string describing/labeling the signature.
@@ -568,6 +571,7 @@ pdfjs-editor-alt-text-settings-close-button = Close
 pdfjs-editor-highlight-added-alert = Highlight added
 pdfjs-editor-freetext-added-alert = Text added
 pdfjs-editor-ink-added-alert = Drawing added
+pdfjs-editor-rectangle-added-alert = Rectangle added
 pdfjs-editor-stamp-added-alert = Image added
 pdfjs-editor-signature-added-alert = Signature added
 

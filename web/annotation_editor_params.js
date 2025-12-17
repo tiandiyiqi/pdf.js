@@ -24,6 +24,9 @@ import { AnnotationEditorParamsType } from "pdfjs-lib";
  * @property {HTMLInputElement} editorInkColor
  * @property {HTMLInputElement} editorInkThickness
  * @property {HTMLInputElement} editorInkOpacity
+ * @property {HTMLInputElement} editorGeoShapeColor
+ * @property {HTMLInputElement} editorGeoShapeThickness
+ * @property {HTMLInputElement} editorGeoShapeOpacity
  * @property {HTMLButtonElement} editorStampAddImage
  * @property {HTMLInputElement} editorFreeHighlightThickness
  * @property {HTMLButtonElement} editorHighlightShowAll
@@ -49,6 +52,9 @@ class AnnotationEditorParams {
     editorInkColor,
     editorInkThickness,
     editorInkOpacity,
+    editorGeoShapeColor,
+    editorGeoShapeThickness,
+    editorGeoShapeOpacity,
     editorStampAddImage,
     editorFreeHighlightThickness,
     editorHighlightShowAll,
@@ -56,7 +62,21 @@ class AnnotationEditorParams {
   }) {
     const { eventBus } = this;
 
+    // 调试：检查几何工具参数元素是否存在
+    console.log("[DEBUG] 几何工具参数元素状态:", {
+      editorGeoShapeColor,
+      editorGeoShapeThickness,
+      editorGeoShapeOpacity,
+    });
+
     const dispatchEvent = (typeStr, value) => {
+      console.log(
+        "[DEBUG] 派发参数事件:",
+        typeStr,
+        value,
+        "类型:",
+        AnnotationEditorParamsType[typeStr]
+      );
       eventBus.dispatch("switchannotationeditorparams", {
         source: this,
         type: AnnotationEditorParamsType[typeStr],
@@ -78,6 +98,21 @@ class AnnotationEditorParams {
     editorInkOpacity.addEventListener("input", function () {
       dispatchEvent("INK_OPACITY", this.valueAsNumber);
     });
+    if (editorGeoShapeColor) {
+      editorGeoShapeColor.addEventListener("input", function () {
+        dispatchEvent("RECTANGLE_COLOR", this.value);
+      });
+    }
+    if (editorGeoShapeThickness) {
+      editorGeoShapeThickness.addEventListener("input", function () {
+        dispatchEvent("RECTANGLE_THICKNESS", this.valueAsNumber);
+      });
+    }
+    if (editorGeoShapeOpacity) {
+      editorGeoShapeOpacity.addEventListener("input", function () {
+        dispatchEvent("RECTANGLE_OPACITY", this.valueAsNumber);
+      });
+    }
     editorStampAddImage.addEventListener("click", () => {
       eventBus.dispatch("reporttelemetry", {
         source: this,
@@ -117,6 +152,21 @@ class AnnotationEditorParams {
             break;
           case AnnotationEditorParamsType.INK_OPACITY:
             editorInkOpacity.value = value;
+            break;
+          case AnnotationEditorParamsType.RECTANGLE_COLOR:
+            if (editorGeoShapeColor) {
+              editorGeoShapeColor.value = value;
+            }
+            break;
+          case AnnotationEditorParamsType.RECTANGLE_THICKNESS:
+            if (editorGeoShapeThickness) {
+              editorGeoShapeThickness.value = value;
+            }
+            break;
+          case AnnotationEditorParamsType.RECTANGLE_OPACITY:
+            if (editorGeoShapeOpacity) {
+              editorGeoShapeOpacity.value = value;
+            }
             break;
           case AnnotationEditorParamsType.HIGHLIGHT_COLOR:
             eventBus.dispatch("mainhighlightcolorpickerupdatecolor", {

@@ -2082,6 +2082,14 @@ class AnnotationEditorUIManager {
    * @param {*} value
    */
   updateParams(type, value) {
+    console.log("[DEBUG] UIManager.updateParams:", {
+      type,
+      value,
+      hasSelection: this.hasSelection,
+      selectedEditorsCount: this.#selectedEditors.size,
+      editorTypesCount: this.#editorTypes?.length,
+    });
+
     if (!this.#editorTypes) {
       return;
     }
@@ -2107,10 +2115,15 @@ class AnnotationEditorUIManager {
     }
 
     if (this.hasSelection) {
+      console.log("[DEBUG] 更新选中的编辑器");
       for (const editor of this.#selectedEditors) {
         editor.updateParams(type, value);
       }
     } else {
+      console.log(
+        "[DEBUG] 更新默认参数，编辑器类型:",
+        this.#editorTypes.map(t => t.name)
+      );
       for (const editorType of this.#editorTypes) {
         editorType.updateDefaultParams(type, value);
       }

@@ -95,6 +95,9 @@ const AnnotationEditorParamsType = {
   HIGHLIGHT_FREE: 33,
   HIGHLIGHT_SHOW_ALL: 34,
   DRAW_STEP: 41,
+  RECTANGLE_COLOR: 51,
+  RECTANGLE_THICKNESS: 52,
+  RECTANGLE_OPACITY: 53,
 };
 
 // Permission flags from Table 22, Section 7.6.3.2 of the PDF specification.

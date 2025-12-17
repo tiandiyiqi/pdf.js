@@ -101,22 +101,26 @@ class DrawLayer {
 
     const defs = DrawLayer._svgFactory.createElement("defs");
     root.append(defs);
-    const path = DrawLayer._svgFactory.createElement("path");
-    defs.append(path);
-    const pathId = `path_p${this.pageIndex}_${id}`;
-    path.setAttribute("id", pathId);
-    path.setAttribute("vector-effect", "non-scaling-stroke");
+
+    // Determine element type: rect or path
+    const isRect = properties.rect !== undefined;
+    const elementType = isRect ? "rect" : "path";
+    const element = DrawLayer._svgFactory.createElement(elementType);
+    defs.append(element);
+    const elementId = `${elementType}_p${this.pageIndex}_${id}`;
+    element.setAttribute("id", elementId);
+    element.setAttribute("vector-effect", "non-scaling-stroke");
 
     if (isPathUpdatable) {
-      this.#toUpdate.set(id, path);
+      this.#toUpdate.set(id, element);
     }
 
     // Create the clipping path for the editor div.
-    const clipPathId = hasClip ? this.#createClipPath(defs, pathId) : null;
+    const clipPathId = hasClip ? this.#createClipPath(defs, elementId) : null;
 
     const use = DrawLayer._svgFactory.createElement("use");
     root.append(use);
-    use.setAttribute("href", `#${pathId}`);
+    use.setAttribute("href", `#${elementId}`);
     this.updateProperties(root, properties);
 
     this.#mapping.set(id, root);
@@ -187,7 +191,15 @@ class DrawLayer {
     if (!properties) {
       return;
     }
-    const { root, bbox, rootClass, path } = properties;
+    const {
+      root,
+      bbox,
+      rootClass,
+      path,
+      rect,
+      rectTransformOrigin,
+      transform,
+    } = properties;
     const element =
       typeof elementOrId === "number"
         ? this.#mapping.get(elementOrId)
@@ -211,6 +223,23 @@ class DrawLayer {
       const defs = element.firstElementChild;
       const pathElement = defs.firstElementChild;
       this.#updateProperties(pathElement, path);
+    }
+    if (rect) {
+      const defs = element.firstElementChild;
+      const rectElement = defs.firstElementChild;
+      this.#updateProperties(rectElement, rect);
+    }
+    if (rectTransformOrigin) {
+      const use = element.querySelector("use");
+      if (use) {
+        use.style.transformOrigin = rectTransformOrigin;
+      }
+    }
+    if (transform !== undefined) {
+      const use = element.querySelector("use");
+      if (use) {
+        use.setAttribute("transform", transform || "");
+      }
     }
   }
 

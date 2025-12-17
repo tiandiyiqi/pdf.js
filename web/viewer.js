@@ -69,6 +69,26 @@ function getViewerConfiguration() {
       editorGeoShapeRect: document.getElementById("editorGeoShapeRect"),
       editorGeoShapeCirc: document.getElementById("editorGeoShapeCirc"),
       editorGeoShapeArrow: document.getElementById("editorGeoShapeArrow"),
+      editorGeoShapeColor: (() => {
+        const el = document.getElementById("editorGeoShapeColor");
+        console.log(
+          "[DEBUG] viewer.js 获取 editorGeoShapeColor:",
+          el,
+          "DOM就绪:",
+          document.readyState
+        );
+        return el;
+      })(),
+      editorGeoShapeThickness: (() => {
+        const el = document.getElementById("editorGeoShapeThickness");
+        console.log("[DEBUG] viewer.js 获取 editorGeoShapeThickness:", el);
+        return el;
+      })(),
+      editorGeoShapeOpacity: (() => {
+        const el = document.getElementById("editorGeoShapeOpacity");
+        console.log("[DEBUG] viewer.js 获取 editorGeoShapeOpacity:", el);
+        return el;
+      })(),
       editorStampButton: document.getElementById("editorStampButton"),
       editorStampParamsToolbar: document.getElementById(
         "editorStampParamsToolbar"
@@ -275,6 +295,11 @@ function getViewerConfiguration() {
       editorInkColor: document.getElementById("editorInkColor"),
       editorInkThickness: document.getElementById("editorInkThickness"),
       editorInkOpacity: document.getElementById("editorInkOpacity"),
+      editorGeoShapeColor: document.getElementById("editorGeoShapeColor"),
+      editorGeoShapeThickness: document.getElementById(
+        "editorGeoShapeThickness"
+      ),
+      editorGeoShapeOpacity: document.getElementById("editorGeoShapeOpacity"),
       editorStampAddImage: document.getElementById("editorStampAddImage"),
       editorSignatureAddSignature: document.getElementById(
         "editorSignatureAddSignature"

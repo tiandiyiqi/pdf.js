@@ -325,6 +325,9 @@ pdfjs-editor-highlight-editor =
 # “Drawing” is a noun, the string is used on the editor for drawings.
 pdfjs-editor-ink-editor =
     .aria-label = 绘图编辑器
+
+pdfjs-editor-rectangle-editor =
+    .aria-label = 矩形编辑器
 # Used when a signature editor is selected/hovered.
 # Variables:
 #   $description (String) - a string describing/labeling the signature.
@@ -524,6 +527,7 @@ pdfjs-editor-alt-text-settings-close-button = 关闭
 pdfjs-editor-highlight-added-alert = 已添加高亮
 pdfjs-editor-freetext-added-alert = 已添加文本
 pdfjs-editor-ink-added-alert = 已添加绘图
+pdfjs-editor-rectangle-added-alert = 已添加矩形
 pdfjs-editor-stamp-added-alert = 已添加图像
 pdfjs-editor-signature-added-alert = 已添加签名
 

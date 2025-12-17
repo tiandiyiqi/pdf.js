@@ -34,6 +34,7 @@ import { AnnotationEditor } from "./editor.js";
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
+import { RectangleEditor } from "./rectangle.js";
 import { setLayerDimensions } from "../display_utils.js";
 import { SignatureEditor } from "./signature.js";
 import { StampEditor } from "./stamp.js";
@@ -87,6 +88,8 @@ class AnnotationEditorLayer {
 
   #geoShapeToolAC = null;
 
+  #currentGeoShapeType = "geoshapeRect"; // Default to rectangle
+
   #textLayer = null;
 
   #textSelectionAC = null;
@@ -103,6 +106,7 @@ class AnnotationEditorLayer {
     [
       FreeTextEditor,
       InkEditor,
+      RectangleEditor,
       StampEditor,
       HighlightEditor,
       SignatureEditor,
@@ -162,6 +166,9 @@ class AnnotationEditorLayer {
    * @param {string} shapeType - 几何工具类型
    */
   #handleGeoShapeToolChange(shapeType) {
+    // 保存当前的几何工具类型
+    this.#currentGeoShapeType = shapeType;
+
     // 直接设置光标样式，而不是依赖CSS类
     switch (shapeType) {
       case "geoshape":
@@ -730,7 +737,26 @@ class AnnotationEditorLayer {
   }
 
   get #currentEditorType() {
-    return AnnotationEditorLayer.#editorTypes.get(this.#uiManager.getMode());
+    const mode = this.#uiManager.getMode();
+
+    // If we're in GEOSHAPE mode, determine the specific editor type based on the current tool
+    if (mode === AnnotationEditorType.GEOSHAPE) {
+      switch (this.#currentGeoShapeType) {
+        case "geoshape":
+        case "geoshapeRect":
+          return RectangleEditor;
+        case "geoshapeCirc":
+          // TODO: Return CircleEditor when implemented
+          return null;
+        case "geoshapeArrow":
+          // TODO: Return ArrowEditor when implemented
+          return null;
+        default:
+          return null;
+      }
+    }
+
+    return AnnotationEditorLayer.#editorTypes.get(mode);
   }
 
   combinedSignal(ac) {
