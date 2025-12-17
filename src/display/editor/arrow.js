@@ -34,7 +34,7 @@ class ArrowDrawingOptions extends DrawingOptions {
     this._viewParameters = viewerParameters;
 
     super.updateProperties({
-      fill: "currentColor",
+      fill: AnnotationEditor._defaultLineColor,
       stroke: AnnotationEditor._defaultLineColor,
       "stroke-opacity": 1,
       "stroke-width": 1,
@@ -42,6 +42,14 @@ class ArrowDrawingOptions extends DrawingOptions {
       "stroke-linejoin": "round",
       "arrow-head-size": 0.02,
     });
+  }
+
+  updateProperty(name, value) {
+    super.updateProperty(name, value);
+    // Keep fill color in sync with stroke color
+    if (name === "stroke") {
+      super.updateProperty("fill", value);
+    }
   }
 
   updateSVGProperty(name, value) {

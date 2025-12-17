@@ -146,7 +146,12 @@ class AnnotationEditorLayer {
         editorType.initialize(l10n, uiManager);
       }
     }
-    uiManager.registerEditorTypes(editorTypes);
+    // Register all editor types including geoShape editors
+    const allEditorTypes = [
+      ...editorTypes,
+      ...AnnotationEditorLayer.#geoShapeEditors,
+    ];
+    uiManager.registerEditorTypes(allEditorTypes);
 
     this.#uiManager = uiManager;
     this.pageIndex = pageIndex;
@@ -195,6 +200,12 @@ class AnnotationEditorLayer {
       default:
         // 默认情况下，恢复为geoshapeEditing类的样式
         this.div.style.cursor = "";
+    }
+
+    // 更新 UI 参数面板以显示当前工具的默认属性
+    const editorType = this.#currentEditorType;
+    if (editorType) {
+      this.#uiManager.updateUIForDefaultProperties(editorType);
     }
   }
 

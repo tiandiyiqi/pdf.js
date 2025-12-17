@@ -34,6 +34,8 @@ import { AnnotationEditorParamsType } from "pdfjs-lib";
  */
 
 class AnnotationEditorParams {
+  #currentGeoShapeType = "geoshapeRect"; // Track current geoshape tool type
+
   /**
    * @param {AnnotationEditorParamsOptions} options
    * @param {EventBus} eventBus
@@ -41,6 +43,10 @@ class AnnotationEditorParams {
   constructor(options, eventBus) {
     this.eventBus = eventBus;
     this.#bindListeners(options);
+    // Listen for geoshape tool changes to track current tool type
+    this.eventBus.on("geoshapetoolchanged", ({ shapeType }) => {
+      this.#currentGeoShapeType = shapeType;
+    });
   }
 
   /**
@@ -62,21 +68,7 @@ class AnnotationEditorParams {
   }) {
     const { eventBus } = this;
 
-    // 调试：检查几何工具参数元素是否存在
-    console.log("[DEBUG] 几何工具参数元素状态:", {
-      editorGeoShapeColor,
-      editorGeoShapeThickness,
-      editorGeoShapeOpacity,
-    });
-
     const dispatchEvent = (typeStr, value) => {
-      console.log(
-        "[DEBUG] 派发参数事件:",
-        typeStr,
-        value,
-        "类型:",
-        AnnotationEditorParamsType[typeStr]
-      );
       eventBus.dispatch("switchannotationeditorparams", {
         source: this,
         type: AnnotationEditorParamsType[typeStr],
@@ -99,18 +91,21 @@ class AnnotationEditorParams {
       dispatchEvent("INK_OPACITY", this.valueAsNumber);
     });
     if (editorGeoShapeColor) {
-      editorGeoShapeColor.addEventListener("input", function () {
-        dispatchEvent("RECTANGLE_COLOR", this.value);
+      editorGeoShapeColor.addEventListener("input", () => {
+        const paramType = this.#getGeoShapeColorParam();
+        dispatchEvent(paramType, editorGeoShapeColor.value);
       });
     }
     if (editorGeoShapeThickness) {
-      editorGeoShapeThickness.addEventListener("input", function () {
-        dispatchEvent("RECTANGLE_THICKNESS", this.valueAsNumber);
+      editorGeoShapeThickness.addEventListener("input", () => {
+        const paramType = this.#getGeoShapeThicknessParam();
+        dispatchEvent(paramType, editorGeoShapeThickness.valueAsNumber);
       });
     }
     if (editorGeoShapeOpacity) {
-      editorGeoShapeOpacity.addEventListener("input", function () {
-        dispatchEvent("RECTANGLE_OPACITY", this.valueAsNumber);
+      editorGeoShapeOpacity.addEventListener("input", () => {
+        const paramType = this.#getGeoShapeOpacityParam();
+        dispatchEvent(paramType, editorGeoShapeOpacity.valueAsNumber);
       });
     }
     editorStampAddImage.addEventListener("click", () => {
@@ -154,16 +149,22 @@ class AnnotationEditorParams {
             editorInkOpacity.value = value;
             break;
           case AnnotationEditorParamsType.RECTANGLE_COLOR:
+          case AnnotationEditorParamsType.CIRCLE_COLOR:
+          case AnnotationEditorParamsType.ARROW_COLOR:
             if (editorGeoShapeColor) {
               editorGeoShapeColor.value = value;
             }
             break;
           case AnnotationEditorParamsType.RECTANGLE_THICKNESS:
+          case AnnotationEditorParamsType.CIRCLE_THICKNESS:
+          case AnnotationEditorParamsType.ARROW_THICKNESS:
             if (editorGeoShapeThickness) {
               editorGeoShapeThickness.value = value;
             }
             break;
           case AnnotationEditorParamsType.RECTANGLE_OPACITY:
+          case AnnotationEditorParamsType.CIRCLE_OPACITY:
+          case AnnotationEditorParamsType.ARROW_OPACITY:
             if (editorGeoShapeOpacity) {
               editorGeoShapeOpacity.value = value;
             }
@@ -186,6 +187,54 @@ class AnnotationEditorParams {
         }
       }
     });
+  }
+
+  /**
+   * Get the appropriate color parameter type based on current geoshape tool
+   */
+  #getGeoShapeColorParam() {
+    switch (this.#currentGeoShapeType) {
+      case "geoshapeCirc":
+        return "CIRCLE_COLOR";
+      case "geoshapeArrow":
+        return "ARROW_COLOR";
+      case "geoshape":
+      case "geoshapeRect":
+      default:
+        return "RECTANGLE_COLOR";
+    }
+  }
+
+  /**
+   * Get the appropriate thickness parameter type based on current geoshape tool
+   */
+  #getGeoShapeThicknessParam() {
+    switch (this.#currentGeoShapeType) {
+      case "geoshapeCirc":
+        return "CIRCLE_THICKNESS";
+      case "geoshapeArrow":
+        return "ARROW_THICKNESS";
+      case "geoshape":
+      case "geoshapeRect":
+      default:
+        return "RECTANGLE_THICKNESS";
+    }
+  }
+
+  /**
+   * Get the appropriate opacity parameter type based on current geoshape tool
+   */
+  #getGeoShapeOpacityParam() {
+    switch (this.#currentGeoShapeType) {
+      case "geoshapeCirc":
+        return "CIRCLE_OPACITY";
+      case "geoshapeArrow":
+        return "ARROW_OPACITY";
+      case "geoshape":
+      case "geoshapeRect":
+      default:
+        return "RECTANGLE_OPACITY";
+    }
   }
 }
 
