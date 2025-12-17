@@ -34,8 +34,8 @@ class ArrowDrawingOptions extends DrawingOptions {
     this._viewParameters = viewerParameters;
 
     super.updateProperties({
-      fill: AnnotationEditor._defaultLineColor,
-      stroke: AnnotationEditor._defaultLineColor,
+      fill: "#ff0000", // 默认红色
+      stroke: "#ff0000", // 默认红色
       "stroke-opacity": 1,
       "stroke-width": 1,
       "stroke-linecap": "round",

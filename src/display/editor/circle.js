@@ -35,7 +35,7 @@ class CircDrawingOptions extends DrawingOptions {
 
     super.updateProperties({
       fill: "none",
-      stroke: AnnotationEditor._defaultLineColor,
+      stroke: "#ff0000", // 默认红色
       "stroke-opacity": 1,
       "stroke-width": 1,
       "stroke-linecap": "round",
