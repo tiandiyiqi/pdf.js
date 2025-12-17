@@ -327,6 +327,7 @@ class BasicColorPicker {
     BasicColorPicker.#l10nColor ||= Object.freeze({
       freetext: "pdfjs-editor-color-picker-free-text-input",
       ink: "pdfjs-editor-color-picker-ink-input",
+      rectangle: "pdfjs-editor-color-picker-rectangle-input",
     });
   }
 

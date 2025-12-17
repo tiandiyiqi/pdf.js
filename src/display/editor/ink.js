@@ -190,6 +190,13 @@ class InkEditor extends DrawingEditor {
   }
 
   /** @inheritdoc */
+  commit() {
+    super.commit();
+    // InkEditor 特有：绘制完成后禁用编辑，因为墨迹已经固化
+    this.disableEditing();
+  }
+
+  /** @inheritdoc */
   get toolbarButtons() {
     this._colorPicker ||= new BasicColorPicker(this);
     return [["colorPicker", this._colorPicker]];

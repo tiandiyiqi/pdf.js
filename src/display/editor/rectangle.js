@@ -203,7 +203,8 @@ class RectangleEditor extends DrawingEditor {
 
   /** @inheritdoc */
   get toolbarButtons() {
-    return [];
+    this._colorPicker ||= new BasicColorPicker(this);
+    return [["colorPicker", this._colorPicker]];
   }
 
   get colorType() {

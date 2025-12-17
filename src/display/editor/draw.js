@@ -339,7 +339,7 @@ class DrawingEditor extends AnnotationEditor {
     super.commit();
 
     this.disableEditMode();
-    this.disableEditing();
+    // 不再调用 disableEditing()，保持编辑器可交互
   }
 
   /** @inheritdoc */

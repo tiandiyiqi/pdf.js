@@ -43,6 +43,7 @@ class EditorToolbar {
       ink: "pdfjs-editor-remove-ink-button",
       stamp: "pdfjs-editor-remove-stamp-button",
       signature: "pdfjs-editor-remove-signature-button",
+      rectangle: "pdfjs-editor-remove-rectangle-button",
     });
   }
 
