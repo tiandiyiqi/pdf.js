@@ -59,9 +59,9 @@
     0 1px 0 rgb(0 0 0 / 0.15), 0 0 1px rgb(0 0 0 / 0.1);
 
   /* Geometry tool cursor styles */
-  --editorGeoShape-rect-cursor: url(images/cursor-editorGeoShapeRect.svg) 0 16, crosshair;
-  --editorGeoShape-circ-cursor: url(images/cursor-editorGeoShapeCirc.svg) 0 16, crosshair;
-  --editorGeoShape-arrow-cursor: url(images/cursor-editorGeoShapeArrow.svg) 0 16, default;
+  --editorGeoShape-rect-cursor: crosshair;
+  --editorGeoShape-circ-cursor: crosshair;
+  --editorGeoShape-arrow-cursor: crosshair;
   --toolbarSidebar-border-bottom: none;
   --button-hover-color: color-mix(in srgb, currentColor 17%, transparent);
   --toggled-btn-color: light-dark(rgb(0 0 0), rgb(255 255 255));

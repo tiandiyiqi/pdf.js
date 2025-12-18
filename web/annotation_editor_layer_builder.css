@@ -203,6 +203,12 @@
     cursor: move;
   }
 
+  /* 几何工具选中后也使用十字线光标，覆盖draggable的move光标 */
+  :is(.rectangleEditor, .circleEditor, .arrowEditor).draggable.selectedEditor,
+  :is(.rectangleEditor, .circleEditor, .arrowEditor).selectedEditor {
+    cursor: crosshair !important;
+  }
+
   &.selectedEditor {
     border: var(--focus-outline);
     outline: var(--focus-outline-around);

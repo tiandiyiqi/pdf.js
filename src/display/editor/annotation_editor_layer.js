@@ -185,17 +185,13 @@ class AnnotationEditorLayer {
     // 保存当前的几何工具类型
     this.#currentGeoShapeType = shapeType;
 
-    // 直接设置光标样式，而不是依赖CSS类
+    // 直接设置光标样式为十字线
     switch (shapeType) {
       case "geoshape":
       case "geoshapeRect":
-        this.div.style.cursor = "var(--editorGeoShape-rect-cursor)";
-        break;
       case "geoshapeCirc":
-        this.div.style.cursor = "var(--editorGeoShape-circ-cursor)";
-        break;
       case "geoshapeArrow":
-        this.div.style.cursor = "var(--editorGeoShape-arrow-cursor)";
+        this.div.style.cursor = "crosshair";
         break;
       default:
         // 默认情况下，恢复为geoshapeEditing类的样式

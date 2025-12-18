@@ -18,16 +18,16 @@ import { Outline } from "./outline.js";
 
 /**
  * Manages the real-time drawing process for circle/ellipse annotations.
- * Tracks the center point and radii, normalizes coordinates, and generates SVG properties.
+ * Tracks the start and end points (two-point drawing mode), normalizes coordinates, and generates SVG properties.
  */
 class CircDrawOutliner {
-  #centerX;
+  #startX;
 
-  #centerY;
+  #startY;
 
-  #radiusX;
+  #endX;
 
-  #radiusY;
+  #endY;
 
   #parentWidth;
 
@@ -45,10 +45,9 @@ class CircDrawOutliner {
     this.#rotation = rotation;
     this.#thickness = thickness;
 
-    // Normalize the starting point (center)
-    [this.#centerX, this.#centerY] = this.#normalizePoint(x, y);
-    this.#radiusX = 0;
-    this.#radiusY = 0;
+    // Normalize the starting point
+    [this.#startX, this.#startY] = this.#normalizePoint(x, y);
+    [this.#endX, this.#endY] = [this.#startX, this.#startY];
   }
 
   /**
@@ -77,8 +76,10 @@ class CircDrawOutliner {
    * Check if the circle is empty (too small to be valid).
    */
   isEmpty() {
-    const threshold = 0.0025; // ~2.5px in a 1000px viewport
-    return this.#radiusX < threshold || this.#radiusY < threshold;
+    const threshold = 0.005; // ~5px in a 1000px viewport
+    const width = Math.abs(this.#endX - this.#startX);
+    const height = Math.abs(this.#endY - this.#startY);
+    return width < threshold || height < threshold;
   }
 
   /**
@@ -97,14 +98,10 @@ class CircDrawOutliner {
   }
 
   /**
-   * Update the radius as the user drags.
+   * Update the end point as the user drags.
    */
   update(x, y) {
-    const [endX, endY] = this.#normalizePoint(x, y);
-
-    // Calculate radii from center to current point
-    this.#radiusX = Math.abs(endX - this.#centerX);
-    this.#radiusY = Math.abs(endY - this.#centerY);
+    [this.#endX, this.#endY] = this.#normalizePoint(x, y);
 
     return {
       ellipse: this.#getCurrentEllipseSVGProperties(),
@@ -115,10 +112,7 @@ class CircDrawOutliner {
    * End the drawing process.
    */
   end(x, y) {
-    const [endX, endY] = this.#normalizePoint(x, y);
-
-    this.#radiusX = Math.abs(endX - this.#centerX);
-    this.#radiusY = Math.abs(endY - this.#centerY);
+    [this.#endX, this.#endY] = this.#normalizePoint(x, y);
 
     return {
       ellipse: this.#getCurrentEllipseSVGProperties(),
@@ -126,14 +120,47 @@ class CircDrawOutliner {
   }
 
   /**
+   * Normalize the rectangle to ensure positive width and height.
+   * Handles negative dimensions (e.g., dragging from bottom-right to top-left).
+   * Then convert to ellipse center and radii.
+   */
+  #normalizeToEllipse() {
+    let x = this.#startX;
+    let y = this.#startY;
+    let width = this.#endX - this.#startX;
+    let height = this.#endY - this.#startY;
+
+    // Swap if width is negative
+    if (width < 0) {
+      x = this.#endX;
+      width = -width;
+    }
+
+    // Swap if height is negative
+    if (height < 0) {
+      y = this.#endY;
+      height = -height;
+    }
+
+    // Convert rectangle to ellipse: center and radii
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const rx = width / 2;
+    const ry = height / 2;
+
+    return [cx, cy, rx, ry];
+  }
+
+  /**
    * Generate SVG properties for the current ellipse state.
    */
   #getCurrentEllipseSVGProperties() {
+    const [cx, cy, rx, ry] = this.#normalizeToEllipse();
     return {
-      cx: Outline.svgRound(this.#centerX),
-      cy: Outline.svgRound(this.#centerY),
-      rx: Outline.svgRound(this.#radiusX),
-      ry: Outline.svgRound(this.#radiusY),
+      cx: Outline.svgRound(cx),
+      cy: Outline.svgRound(cy),
+      rx: Outline.svgRound(rx),
+      ry: Outline.svgRound(ry),
     };
   }
 
@@ -142,7 +169,7 @@ class CircDrawOutliner {
    */
   getOutlines(parentWidth, parentHeight, scale, innerMargin) {
     this.#outlines.build(
-      [this.#centerX, this.#centerY, this.#radiusX, this.#radiusY],
+      this.#normalizeToEllipse(),
       parentWidth,
       parentHeight,
       scale,
